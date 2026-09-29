@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import text
@@ -27,6 +27,13 @@ class FinancialSummary:
             "quantidade_vendas": self.sales_count,
             "quantidade_gastos": self.expenses_count,
         }
+
+
+def end_of_day_exclusive(day: date) -> date:
+    try:
+        return day + timedelta(days=1)
+    except OverflowError as error:
+        raise ValueError("A data final está fora do intervalo permitido.") from error
 
 
 def calculate_financial_summary(

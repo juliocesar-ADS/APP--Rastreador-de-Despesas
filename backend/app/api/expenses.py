@@ -1,6 +1,4 @@
 from collections.abc import Mapping
-from datetime import date
-from decimal import Decimal
 
 from flask import url_for
 from flask_jwt_extended import jwt_required
@@ -13,13 +11,13 @@ from backend.app.api.errors import ApiError
 from backend.app.api.requests import require_json_object
 from backend.app.api.security import current_user_id
 from backend.app.api.validation import (
-    format_time_value,
     parse_amount,
     parse_business_date,
     parse_business_time,
     parse_description,
 )
 from backend.app.extensions import db
+from backend.app.services.serializers import serialize_expense
 
 
 REQUIRED_EXPENSE_FIELDS = (
@@ -63,27 +61,6 @@ def _parse_expense(payload: dict[str, object]) -> dict[str, object]:
         "data_gasto": parse_business_date(payload["data_gasto"]),
         "hora_gasto": parse_business_time(payload["hora_gasto"]),
         "observacao": observation.strip() if observation else None,
-    }
-
-
-def _serialize_expense(row: Mapping[str, object]) -> dict[str, object]:
-    amount = Decimal(str(row["valor"])).quantize(Decimal("0.01"))
-    expense_date = row["data_gasto"]
-    expense_time = row["hora_gasto"]
-
-    return {
-        "id": row["id"],
-        "descricao": row["descricao"],
-        "categoria_id": row["categoria_id"],
-        "categoria_nome": row["categoria_nome"],
-        "valor": format(amount, ".2f"),
-        "data_gasto": (
-            expense_date.isoformat()
-            if isinstance(expense_date, date)
-            else str(expense_date)
-        ),
-        "hora_gasto": format_time_value(expense_time),
-        "observacao": row["observacao"],
     }
 
 
@@ -183,13 +160,13 @@ def list_expenses() -> dict[str, list[dict[str, object]]]:
         {"usuario_id": current_user_id()},
     ).mappings().all()
 
-    return {"dados": [_serialize_expense(expense) for expense in expenses]}
+    return {"dados": [serialize_expense(expense) for expense in expenses]}
 
 
 @api_bp.get("/gastos/<int:expense_id>")
 @jwt_required()
 def get_expense(expense_id: int) -> dict[str, object]:
-    return _serialize_expense(_find_expense(expense_id, current_user_id()))
+    return serialize_expense(_find_expense(expense_id, current_user_id()))
 
 
 @api_bp.post("/gastos")
@@ -232,7 +209,7 @@ def create_expense() -> tuple[dict[str, object], int, dict[str, str]]:
         **expense,
     }
     return (
-        _serialize_expense(created_expense),
+        serialize_expense(created_expense),
         201,
         {"Location": url_for("api.get_expense", expense_id=expense_id)},
     )

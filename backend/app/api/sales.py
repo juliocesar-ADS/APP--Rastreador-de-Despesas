@@ -1,6 +1,4 @@
 from collections.abc import Mapping
-from datetime import date
-from decimal import Decimal
 
 from flask import url_for
 from flask_jwt_extended import jwt_required
@@ -12,13 +10,13 @@ from backend.app.api.errors import ApiError
 from backend.app.api.requests import require_json_object
 from backend.app.api.security import current_user_id
 from backend.app.api.validation import (
-    format_time_value,
     parse_amount,
     parse_business_date,
     parse_business_time,
     parse_description,
 )
 from backend.app.extensions import db
+from backend.app.services.serializers import serialize_sale
 
 
 PAYMENT_METHODS = {
@@ -72,26 +70,6 @@ def _parse_sale(payload: dict[str, object]) -> dict[str, object]:
     }
 
 
-def _serialize_sale(row: Mapping[str, object]) -> dict[str, object]:
-    amount = Decimal(str(row["valor"])).quantize(Decimal("0.01"))
-    sale_date = row["data_venda"]
-    sale_time = row["hora_venda"]
-
-    return {
-        "id": row["id"],
-        "descricao": row["descricao"],
-        "valor": format(amount, ".2f"),
-        "data_venda": (
-            sale_date.isoformat()
-            if isinstance(sale_date, date)
-            else str(sale_date)
-        ),
-        "hora_venda": format_time_value(sale_time),
-        "forma_pagamento": row["forma_pagamento"],
-        "observacao": row["observacao"],
-    }
-
-
 def _find_sale(sale_id: int, user_id: int) -> Mapping[str, object]:
     sale = db.session.execute(
         text(
@@ -120,13 +98,13 @@ def list_sales() -> dict[str, list[dict[str, object]]]:
         {"usuario_id": current_user_id()},
     ).mappings().all()
 
-    return {"dados": [_serialize_sale(sale) for sale in sales]}
+    return {"dados": [serialize_sale(sale) for sale in sales]}
 
 
 @api_bp.get("/vendas/<int:sale_id>")
 @jwt_required()
 def get_sale(sale_id: int) -> dict[str, object]:
-    return _serialize_sale(_find_sale(sale_id, current_user_id()))
+    return serialize_sale(_find_sale(sale_id, current_user_id()))
 
 
 @api_bp.post("/vendas")
@@ -150,7 +128,7 @@ def create_sale() -> tuple[dict[str, object], int, dict[str, str]]:
     db.session.commit()
     created_sale = {"id": sale_id, **sale}
     return (
-        _serialize_sale(created_sale),
+        serialize_sale(created_sale),
         201,
         {"Location": url_for("api.get_sale", sale_id=sale_id)},
     )

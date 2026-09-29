@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Flask
 from werkzeug.exceptions import HTTPException
@@ -108,6 +109,7 @@ def _validate_config(config: Mapping[str, object]) -> None:
 
     if not config.get("SQLALCHEMY_DATABASE_URI"):
         missing.append("DATABASE_URL")
+    timezone = config.get("APP_TIMEZONE")
 
     if missing:
         names = ", ".join(missing)
@@ -115,6 +117,14 @@ def _validate_config(config: Mapping[str, object]) -> None:
             f"Configuração obrigatória ausente: {names}. "
             "Copie .env.example para .env e ajuste os valores."
         )
+    if not isinstance(timezone, str) or not timezone.strip():
+        raise RuntimeError("APP_TIMEZONE deve conter um fuso horário IANA válido.")
+    try:
+        ZoneInfo(timezone)
+    except (ZoneInfoNotFoundError, ValueError) as error:
+        raise RuntimeError(
+            f"O fuso horário configurado em APP_TIMEZONE não existe: {timezone}."
+        ) from error
     if invalid_secrets:
         names = ", ".join(invalid_secrets)
         raise RuntimeError(

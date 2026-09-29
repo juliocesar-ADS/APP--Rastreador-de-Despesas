@@ -22,3 +22,15 @@ def test_app_rejects_short_or_example_secrets(secret_key, jwt_secret_key):
                 "SQLALCHEMY_DATABASE_URI": "sqlite://",
             }
         )
+
+
+def test_app_rejects_unknown_business_timezone():
+    with pytest.raises(RuntimeError, match="APP_TIMEZONE"):
+        create_app(
+            {
+                "SECRET_KEY": "chave-flask-local-de-teste-com-mais-de-32-bytes",
+                "JWT_SECRET_KEY": "chave-jwt-local-de-teste-com-mais-de-32-bytes",
+                "SQLALCHEMY_DATABASE_URI": "sqlite://",
+                "APP_TIMEZONE": "America/Desconhecida",
+            }
+        )
