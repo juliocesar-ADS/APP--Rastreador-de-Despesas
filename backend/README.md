@@ -42,18 +42,25 @@ Com o ambiente virtual ativo, o banco configurado e `.env` preenchido:
 python -m backend.run
 ```
 
-O servidor de desenvolvimento do Flask fica acessível por padrão em `http://127.0.0.1:5000`. Ele não deve ser usado como servidor de produção. Nesta etapa ainda não há rotas HTTP; os endpoints REST serão adicionados na etapa de API.
+O servidor de desenvolvimento do Flask fica acessível por padrão em `http://127.0.0.1:5000`. Ele não deve ser usado como servidor de produção.
 
-## Verificação da estrutura e da conexão SQLAlchemy
+## API inicial
 
-Este teste usa SQLite em memória apenas para confirmar que a fábrica Flask e a extensão SQLAlchemy inicializam. Ele não substitui a configuração nem os testes de integração com o MySQL:
+`GET /api/health` verifica a conexão com o banco. Se o banco estiver indisponível, a API responde com HTTP 503 e uma mensagem JSON em português.
+
+Erros HTTP e falhas inesperadas também são retornados em JSON. Detalhes de exceções internas são registrados no log do servidor, mas não enviados ao cliente. Corpos de requisição JSON são limitados a 1 MiB; os endpoints de negócio ainda serão acrescentados nas etapas seguintes.
+
+## Testes
+
+Instale as dependências de desenvolvimento e execute os testes da API:
 
 ```powershell
-python -c "from sqlalchemy import text; from backend.app import create_app; from backend.app.extensions import db; app = create_app({'TESTING': True, 'SECRET_KEY': 'chave-local-de-teste', 'SQLALCHEMY_DATABASE_URI': 'sqlite://'}); app.app_context().push(); assert db.session.execute(text('SELECT 1')).scalar_one() == 1; print('Fabrica Flask e SQLAlchemy OK')"
+python -m pip install -r backend\requirements-dev.txt
+python -m pytest backend\tests
 ```
 
-As configurações `FLASK_SECRET_KEY` e `DATABASE_URL` são obrigatórias ao iniciar normalmente. A fábrica permite substituí-las explicitamente em testes.
+Os testes usam SQLite em memória para isolar a camada HTTP e não substituem os testes de integração com MySQL. As configurações `FLASK_SECRET_KEY` e `DATABASE_URL` são obrigatórias ao iniciar normalmente; a fábrica permite substituí-las explicitamente em testes.
 
 ## Validação executada
 
-O backend foi compilado e a fábrica Flask/SQLAlchemy foi testada com uma consulta SQLite em memória. A conexão configurada por `DATABASE_URL` também foi exercitada por PyMySQL contra uma instância MySQL 8.0.45 temporária e isolada; a consulta de versão retornou com sucesso. A instância e os dados temporários foram encerrados e removidos. Os endpoints de negócio ainda não existem nesta etapa.
+O backend foi compilado e a conexão configurada por `DATABASE_URL` foi exercitada por PyMySQL contra uma instância MySQL 8.0.45 temporária e isolada; a consulta de versão retornou com sucesso. A instância e os dados temporários foram encerrados e removidos.

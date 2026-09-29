@@ -15,6 +15,7 @@ def load_config() -> dict[str, object]:
         "SQLALCHEMY_DATABASE_URI": os.getenv("DATABASE_URL"),
         "SQLALCHEMY_TRACK_MODIFICATIONS": False,
         "SQLALCHEMY_ENGINE_OPTIONS": {"pool_pre_ping": True},
+        "MAX_CONTENT_LENGTH": 1_048_576,
         "APP_TIMEZONE": os.getenv("APP_TIMEZONE", "America/Sao_Paulo"),
         "DEBUG": os.getenv("FLASK_DEBUG", "false").strip().lower() == "true",
     }
