@@ -1,0 +1,28 @@
+# Configuracoes locais e segredos
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+
+# IDEs e sistema operacional
+.idea/
+.vscode/
+*.iml
+Thumbs.db
+Desktop.ini
