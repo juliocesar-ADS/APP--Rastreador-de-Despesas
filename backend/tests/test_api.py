@@ -95,7 +95,7 @@ def test_json_requests_are_validated(client):
 
     response = client.post(
         "/api/teste-json",
-        data="x" * 33,
+        data="x" * 2049,
         content_type="application/json",
     )
 

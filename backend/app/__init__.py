@@ -6,7 +6,7 @@ from werkzeug.exceptions import HTTPException
 from backend.app.api import api_bp
 from backend.app.api.errors import ApiError
 from backend.app.config import load_config
-from backend.app.extensions import db
+from backend.app.extensions import db, jwt
 
 
 HTTP_ERROR_DETAILS = {
@@ -32,6 +32,7 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
 
     _validate_config(app.config)
     db.init_app(app)
+    jwt.init_app(app)
     app.register_blueprint(api_bp)
 
     @app.errorhandler(ApiError)
@@ -63,13 +64,48 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
             }
         }, 500
 
+    @jwt.unauthorized_loader
+    def handle_missing_token(_reason: str) -> tuple[dict[str, object], int]:
+        return _jwt_error(
+            "token_ausente",
+            "Autentique-se para acessar este recurso.",
+        )
+
+    @jwt.invalid_token_loader
+    def handle_invalid_token(_reason: str) -> tuple[dict[str, object], int]:
+        return _jwt_error("token_invalido", "O token de acesso é inválido.")
+
+    @jwt.expired_token_loader
+    def handle_expired_token(
+        _jwt_header: dict[str, object],
+        _jwt_payload: dict[str, object],
+    ) -> tuple[dict[str, object], int]:
+        return _jwt_error("token_expirado", "O token expirou. Entre novamente.")
+
     return app
+
+
+def _jwt_error(code: str, message: str) -> tuple[dict[str, object], int]:
+    return {"erro": {"codigo": code, "mensagem": message}}, 401
 
 
 def _validate_config(config: Mapping[str, object]) -> None:
     missing = []
-    if not config.get("SECRET_KEY"):
-        missing.append("FLASK_SECRET_KEY")
+    invalid_secrets = []
+    for config_key, environment_name in (
+        ("SECRET_KEY", "FLASK_SECRET_KEY"),
+        ("JWT_SECRET_KEY", "JWT_SECRET_KEY"),
+    ):
+        value = config.get(config_key)
+        if not value:
+            missing.append(environment_name)
+        elif (
+            not isinstance(value, str)
+            or len(value.encode("utf-8")) < 32
+            or "SUBSTITUA_" in value
+        ):
+            invalid_secrets.append(environment_name)
+
     if not config.get("SQLALCHEMY_DATABASE_URI"):
         missing.append("DATABASE_URL")
 
@@ -78,4 +114,10 @@ def _validate_config(config: Mapping[str, object]) -> None:
         raise RuntimeError(
             f"Configuração obrigatória ausente: {names}. "
             "Copie .env.example para .env e ajuste os valores."
+        )
+    if invalid_secrets:
+        names = ", ".join(invalid_secrets)
+        raise RuntimeError(
+            f"As chaves {names} devem ter pelo menos 32 bytes e não podem "
+            "conter os valores de exemplo."
         )

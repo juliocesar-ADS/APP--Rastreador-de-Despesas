@@ -59,7 +59,7 @@ Esta é uma estrutura-alvo; os diretórios de implementação serão criados nas
 ## Segurança e configuração
 
 - Segredos e credenciais ficam em variáveis de ambiente; `.env` não será versionado.
-- A API terá autenticação para proteger os dados financeiros; senhas serão armazenadas somente com hash seguro e os endpoints privados verificarão a identidade do usuário.
+- A API usará tokens Bearer JWT para proteger os dados financeiros; senhas serão armazenadas somente com hash seguro e os endpoints privados verificarão a identidade do usuário.
 - A API validará entradas e retornará códigos HTTP e mensagens JSON apropriados.
 - A conexão pública entre aplicativo e API usará HTTPS; credenciais do banco não serão incluídas no aplicativo.
 

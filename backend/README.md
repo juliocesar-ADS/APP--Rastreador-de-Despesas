@@ -24,13 +24,13 @@ Copie o arquivo de exemplo e configure valores locais:
 Copy-Item .env.example .env
 ```
 
-Edite `.env` com uma chave secreta aleatória e a URL do seu banco. Gere uma chave com:
+Edite `.env` com duas chaves secretas independentes e a URL do seu banco. Gere uma chave aleatória para cada segredo com:
 
 ```powershell
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Substitua `SUBSTITUA_POR_UMA_CHAVE_ALEATORIA` e `SUBSTITUA_A_SENHA`. Não use a senha `root` do MySQL na aplicação. Se a senha tiver caracteres especiais, codifique-os como URL antes de colocá-la em `DATABASE_URL`.
+Substitua `SUBSTITUA_POR_UMA_CHAVE_ALEATORIA`, `SUBSTITUA_POR_OUTRA_CHAVE_ALEATORIA` e `SUBSTITUA_A_SENHA`. Não use a senha `root` do MySQL na aplicação. Se a senha tiver caracteres especiais, codifique-os como URL antes de colocá-la em `DATABASE_URL`.
 
 `.env` contém segredos locais e está excluído pelo `.gitignore`; somente `.env.example`, sem credenciais reais, deve ser versionado.
 
@@ -50,6 +50,18 @@ O servidor de desenvolvimento do Flask fica acessível por padrão em `http://12
 
 Erros HTTP e falhas inesperadas também são retornados em JSON. Detalhes de exceções internas são registrados no log do servidor, mas não enviados ao cliente. Corpos de requisição JSON são limitados a 1 MiB; os endpoints de negócio ainda serão acrescentados nas etapas seguintes.
 
+## Contas e vendas
+
+- `POST /api/usuarios`: cria uma conta e suas categorias padrão. Senhas são armazenadas com hash; o endpoint não retorna a senha. Campos: `nome`, `email` e `senha`.
+- `POST /api/auth/login`: valida e-mail e senha e retorna um token Bearer com validade de 30 minutos.
+- `GET /api/vendas`: lista as vendas da conta autenticada.
+- `GET /api/vendas/<id>`: consulta uma venda pertencente à conta autenticada.
+- `POST /api/vendas`: cadastra uma venda com `descricao`, `valor`, `data_venda`, `hora_venda`, `forma_pagamento` e `observacao` opcional.
+
+As rotas de vendas exigem `Authorization: Bearer <token>`. O campo `valor` deve ser enviado como texto decimal (por exemplo, `"850.00"`), evitando perda de precisão; valores iguais a zero, negativos ou com mais de duas casas decimais são rejeitados. Atualização e exclusão serão adicionadas na etapa prevista no plano.
+
+Formas de pagamento aceitas: `dinheiro`, `pix`, `cartao_debito`, `cartao_credito` e `outro`. A data deve usar `AAAA-MM-DD`; o horário deve usar `HH:MM` ou `HH:MM:SS`.
+
 ## Testes
 
 Instale as dependências de desenvolvimento e execute os testes da API:
@@ -59,8 +71,8 @@ python -m pip install -r backend\requirements-dev.txt
 python -m pytest backend\tests
 ```
 
-Os testes usam SQLite em memória para isolar a camada HTTP e não substituem os testes de integração com MySQL. As configurações `FLASK_SECRET_KEY` e `DATABASE_URL` são obrigatórias ao iniciar normalmente; a fábrica permite substituí-las explicitamente em testes.
+Os testes usam SQLite em memória para isolar a camada HTTP e não substituem os testes de integração com MySQL. As configurações `FLASK_SECRET_KEY`, `JWT_SECRET_KEY` e `DATABASE_URL` são obrigatórias ao iniciar normalmente; a fábrica permite substituí-las explicitamente em testes.
 
 ## Validação executada
 
-O backend foi compilado e a conexão configurada por `DATABASE_URL` foi exercitada por PyMySQL contra uma instância MySQL 8.0.45 temporária e isolada; a consulta de versão retornou com sucesso. A instância e os dados temporários foram encerrados e removidos.
+Os 26 testes automatizados passaram. Além dos testes isolados com SQLite, o fluxo de criação de conta, login e cadastro/listagem de venda foi exercitado contra o esquema real em uma instância MySQL 8.0.45 temporária e isolada. O valor `"0.10"` foi persistido e retornado sem perda de precisão; a instância e os dados temporários foram encerrados e removidos.
