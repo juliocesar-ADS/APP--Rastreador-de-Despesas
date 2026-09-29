@@ -57,10 +57,15 @@ Erros HTTP e falhas inesperadas também são retornados em JSON. Detalhes de exc
 - `GET /api/vendas`: lista as vendas da conta autenticada.
 - `GET /api/vendas/<id>`: consulta uma venda pertencente à conta autenticada.
 - `POST /api/vendas`: cadastra uma venda com `descricao`, `valor`, `data_venda`, `hora_venda`, `forma_pagamento` e `observacao` opcional.
+- `GET /api/categorias/gastos`: lista as categorias ativas da conta.
+- `POST /api/categorias/gastos`: cria uma categoria adicional informando `nome`.
+- `GET /api/gastos`: lista os gastos da conta autenticada.
+- `GET /api/gastos/<id>`: consulta um gasto pertencente à conta autenticada.
+- `POST /api/gastos`: cadastra um gasto com `descricao`, `categoria_id`, `valor`, `data_gasto`, `hora_gasto` e `observacao` opcional. O `categoria_id` deve vir da lista de categorias da conta.
 
 As rotas de vendas exigem `Authorization: Bearer <token>`. O campo `valor` deve ser enviado como texto decimal (por exemplo, `"850.00"`), evitando perda de precisão; valores iguais a zero, negativos ou com mais de duas casas decimais são rejeitados. Atualização e exclusão serão adicionadas na etapa prevista no plano.
 
-Formas de pagamento aceitas: `dinheiro`, `pix`, `cartao_debito`, `cartao_credito` e `outro`. A data deve usar `AAAA-MM-DD`; o horário deve usar `HH:MM` ou `HH:MM:SS`.
+Todas as rotas privadas exigem `Authorization: Bearer <token>`. A API confere a conta do token em cada consulta e não aceita categorias de outra conta. Formas de pagamento aceitas: `dinheiro`, `pix`, `cartao_debito`, `cartao_credito` e `outro`. A data deve usar `AAAA-MM-DD`; o horário deve usar `HH:MM` ou `HH:MM:SS`.
 
 ## Testes
 
@@ -75,4 +80,4 @@ Os testes usam SQLite em memória para isolar a camada HTTP e não substituem os
 
 ## Validação executada
 
-Os 26 testes automatizados passaram. Além dos testes isolados com SQLite, o fluxo de criação de conta, login e cadastro/listagem de venda foi exercitado contra o esquema real em uma instância MySQL 8.0.45 temporária e isolada. O valor `"0.10"` foi persistido e retornado sem perda de precisão; a instância e os dados temporários foram encerrados e removidos.
+Os 39 testes automatizados passaram. Os fluxos de conta, login, vendas, categorias e gastos foram exercitados contra o esquema real em uma instância MySQL 8.0.45 temporária e isolada. O valor `"120.50"` foi persistido e lido corretamente, e os horários retornaram normalizados como `HH:MM:SS`; a instância e os dados temporários foram encerrados e removidos.

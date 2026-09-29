@@ -57,6 +57,23 @@ def app():
                 "FOREIGN KEY (usuario_id) REFERENCES usuarios (id))"
             )
         )
+        db.session.execute(
+            text(
+                "CREATE TABLE gastos ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                "usuario_id INTEGER NOT NULL, "
+                "categoria_id INTEGER NOT NULL, "
+                "descricao VARCHAR(255) NOT NULL, "
+                "valor NUMERIC(13, 2) NOT NULL CHECK (valor > 0), "
+                "data_gasto DATE NOT NULL, "
+                "hora_gasto TIME NOT NULL, "
+                "observacao TEXT, "
+                "criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                "FOREIGN KEY (usuario_id) REFERENCES usuarios (id), "
+                "FOREIGN KEY (usuario_id, categoria_id) "
+                "REFERENCES categorias_gastos (usuario_id, id))"
+            )
+        )
         db.session.commit()
 
     @app.post("/api/teste-json")
