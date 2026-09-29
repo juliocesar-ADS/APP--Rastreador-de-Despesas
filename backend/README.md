@@ -66,6 +66,7 @@ Erros HTTP e falhas inesperadas também são retornados em JSON. Detalhes de exc
 - `GET /api/relatorios/ontem`: apresenta as movimentações e os totais do dia anterior no mesmo fuso.
 - `GET /api/relatorios/dia?data=AAAA-MM-DD`: consulta um dia específico.
 - `GET /api/relatorios/periodo?inicio=AAAA-MM-DD&fim=AAAA-MM-DD`: consulta um intervalo com as duas datas incluídas.
+- `GET /api/relatorios/mes/<ano>/<mes>`: consulta o resumo e os lançamentos cronológicos de um mês.
 
 As rotas de vendas exigem `Authorization: Bearer <token>`. O campo `valor` deve ser enviado como texto decimal (por exemplo, `"850.00"`), evitando perda de precisão; valores iguais a zero, negativos ou com mais de duas casas decimais são rejeitados. Atualização e exclusão serão adicionadas na etapa prevista no plano.
 
@@ -73,7 +74,7 @@ Todas as rotas privadas exigem `Authorization: Bearer <token>`. A API confere a 
 
 ## Cálculos financeiros
 
-O serviço `backend.app.services.financial.calculate_financial_summary` calcula os totais de vendas e gastos com `Decimal`, além do faturamento bruto, resultado líquido e quantidades. O intervalo interno usa início inclusivo e fim exclusivo, e todos os cálculos são restritos à conta autenticada. Os relatórios diários já usam esse serviço; os relatórios mensais e o dashboard serão ligados a ele nas próximas etapas.
+O serviço `backend.app.services.financial.calculate_financial_summary` calcula os totais de vendas e gastos com `Decimal`, além do faturamento bruto, resultado líquido e quantidades. O intervalo interno usa início inclusivo e fim exclusivo, e todos os cálculos são restritos à conta autenticada. Os relatórios diários e mensais já usam esse serviço; o dashboard será ligado a ele na próxima etapa.
 
 ## Testes
 
@@ -88,4 +89,4 @@ Os testes usam SQLite em memória para isolar a camada HTTP e não substituem os
 
 ## Validação executada
 
-Os 50 testes automatizados passaram. Os fluxos de conta, login, vendas, categorias, gastos, cálculo financeiro e relatórios diários foram validados. A integração de relatórios também foi exercitada contra MySQL 8.0.45, conferindo totais, movimentações e horários; a instância temporária foi encerrada e seus dados removidos.
+Os 52 testes automatizados passaram. Os fluxos de conta, login, vendas, categorias, gastos, cálculo financeiro e relatórios diários/mensais foram validados. A integração de relatórios foi exercitada contra MySQL 8.0.45, incluindo fevereiro bissexto e limites de período; as instâncias temporárias foram encerradas e seus dados removidos.

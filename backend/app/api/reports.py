@@ -12,6 +12,22 @@ from backend.app.services.financial import end_of_day_exclusive
 from backend.app.services.reports import build_financial_report
 
 
+MONTH_NAMES = (
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+)
+
+
 def business_today() -> date:
     timezone = ZoneInfo(current_app.config["APP_TIMEZONE"])
     return datetime.now(timezone).date()
@@ -90,3 +106,31 @@ def report_for_period() -> dict[str, object]:
         start_date,
         end_date_exclusive,
     )
+
+
+@api_bp.get("/relatorios/mes/<int:year>/<int:month>")
+@jwt_required()
+def monthly_report(year: int, month: int) -> dict[str, object]:
+    if month < 1 or month > 12:
+        raise ApiError(422, "mes_invalido", "O mês deve estar entre 1 e 12.")
+
+    try:
+        start_date = date(year, month, 1)
+        if month == 12:
+            end_date_exclusive = date(year + 1, 1, 1)
+        else:
+            end_date_exclusive = date(year, month + 1, 1)
+    except ValueError as error:
+        raise ApiError(422, "periodo_invalido", "O ano informado é inválido.") from error
+
+    report = build_financial_report(
+        current_user_id(),
+        start_date,
+        end_date_exclusive,
+    )
+    return {
+        "ano": year,
+        "mes": month,
+        "nome_mes": MONTH_NAMES[month - 1],
+        **report,
+    }
