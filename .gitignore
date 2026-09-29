@@ -19,6 +19,11 @@ htmlcov/
 .flutter-plugins-dependencies
 .packages
 build/
+.gradle/
+**/.kotlin/
+*.jks
+*.keystore
+key.properties
 
 # IDEs e sistema operacional
 .idea/

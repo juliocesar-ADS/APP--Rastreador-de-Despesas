@@ -125,6 +125,22 @@ def test_expenses_and_categories_are_isolated_between_users(client):
     assert response.status_code == 404
 
 
+def test_expenses_can_be_filtered_by_date_and_category(client):
+    token = authenticated_user(client)
+    client.post("/api/gastos", json=EXPENSE, headers=bearer(token))
+    second_category = {**EXPENSE, "categoria_id": 5, "data_gasto": "2026-09-30"}
+    client.post("/api/gastos", json=second_category, headers=bearer(token))
+
+    response = client.get(
+        "/api/gastos?inicio=2026-09-30&fim=2026-09-30&categoria_id=5",
+        headers=bearer(token),
+    )
+
+    assert response.status_code == 200
+    assert len(response.get_json()["dados"]) == 1
+    assert response.get_json()["dados"][0]["categoria_id"] == 5
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -148,3 +164,70 @@ def test_create_expense_rejects_invalid_fields(client, field, value):
 
     assert response.status_code == 422
     assert response.get_json()["erro"]["codigo"]
+
+
+def test_update_and_delete_expense(client):
+    token = authenticated_user(client)
+    created = client.post(
+        "/api/gastos",
+        json=EXPENSE,
+        headers=bearer(token),
+    ).get_json()
+    updated_payload = {
+        **EXPENSE,
+        "descricao": "Gasto atualizado",
+        "categoria_id": 5,
+        "valor": "200.00",
+        "observacao": None,
+    }
+
+    response = client.put(
+        f"/api/gastos/{created['id']}",
+        json=updated_payload,
+        headers=bearer(token),
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["descricao"] == "Gasto atualizado"
+    assert response.get_json()["categoria_id"] == 5
+    assert response.get_json()["categoria_nome"] == "Contas"
+    assert response.get_json()["valor"] == "200.00"
+    assert response.get_json()["observacao"] is None
+
+    response = client.delete(
+        f"/api/gastos/{created['id']}",
+        headers=bearer(token),
+    )
+
+    assert response.status_code == 204
+    assert client.get(
+        f"/api/gastos/{created['id']}",
+        headers=bearer(token),
+    ).status_code == 404
+
+
+def test_user_cannot_update_or_delete_another_users_expense(client):
+    first_token = authenticated_user(client, "primeiro@example.com")
+    second_token = authenticated_user(client, "segundo@example.com")
+    created = client.post(
+        "/api/gastos",
+        json=EXPENSE,
+        headers=bearer(first_token),
+    ).get_json()
+
+    update = client.put(
+        f"/api/gastos/{created['id']}",
+        json=EXPENSE,
+        headers=bearer(second_token),
+    )
+    delete = client.delete(
+        f"/api/gastos/{created['id']}",
+        headers=bearer(second_token),
+    )
+
+    assert update.status_code == 404
+    assert delete.status_code == 404
+    assert client.get(
+        f"/api/gastos/{created['id']}",
+        headers=bearer(first_token),
+    ).status_code == 200

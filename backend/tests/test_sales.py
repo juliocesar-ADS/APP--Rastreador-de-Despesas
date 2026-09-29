@@ -145,3 +145,88 @@ def test_sales_are_returned_in_reverse_chronological_order(client):
         "15:00:00",
         "12:00:00",
     ]
+
+
+def test_sales_can_be_filtered_by_date_and_payment_method(client):
+    token = authenticated_user(client)
+    client.post("/api/vendas", json=SALE, headers=bearer(token))
+    client.post(
+        "/api/vendas",
+        json={
+            **SALE,
+            "data_venda": "2026-09-30",
+            "forma_pagamento": "dinheiro",
+        },
+        headers=bearer(token),
+    )
+
+    response = client.get(
+        "/api/vendas?inicio=2026-09-30&fim=2026-09-30&forma_pagamento=dinheiro",
+        headers=bearer(token),
+    )
+
+    assert response.status_code == 200
+    assert len(response.get_json()["dados"]) == 1
+    assert response.get_json()["dados"][0]["forma_pagamento"] == "dinheiro"
+
+
+def test_update_and_delete_sale(client):
+    token = authenticated_user(client)
+    created = client.post("/api/vendas", json=SALE, headers=bearer(token)).get_json()
+    updated_payload = {
+        **SALE,
+        "descricao": "Venda atualizada",
+        "valor": "999.99",
+        "forma_pagamento": "dinheiro",
+        "observacao": "Corrigida",
+    }
+
+    response = client.put(
+        f"/api/vendas/{created['id']}",
+        json=updated_payload,
+        headers=bearer(token),
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["descricao"] == "Venda atualizada"
+    assert response.get_json()["valor"] == "999.99"
+    assert response.get_json()["forma_pagamento"] == "dinheiro"
+    assert response.get_json()["observacao"] == "Corrigida"
+
+    response = client.delete(
+        f"/api/vendas/{created['id']}",
+        headers=bearer(token),
+    )
+
+    assert response.status_code == 204
+    assert client.get(
+        f"/api/vendas/{created['id']}",
+        headers=bearer(token),
+    ).status_code == 404
+
+
+def test_user_cannot_update_or_delete_another_users_sale(client):
+    first_token = authenticated_user(client, "primeiro@example.com")
+    second_token = authenticated_user(client, "segundo@example.com")
+    created = client.post(
+        "/api/vendas",
+        json=SALE,
+        headers=bearer(first_token),
+    ).get_json()
+
+    update = client.put(
+        f"/api/vendas/{created['id']}",
+        json=SALE,
+        headers=bearer(second_token),
+    )
+    delete = client.delete(
+        f"/api/vendas/{created['id']}",
+        headers=bearer(second_token),
+    )
+
+    assert update.status_code == 404
+    assert delete.status_code == 404
+    assert client.get(
+        f"/api/vendas/{created['id']}",
+        headers=bearer(first_token),
+    ).status_code == 200

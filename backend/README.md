@@ -1,93 +1,73 @@
 # Backend Flask
 
-Backend Flask da aplicação, com autenticação, vendas, gastos e categorias já disponíveis. Os endpoints de relatórios serão acrescentados nas próximas etapas.
+API REST da aplicação. O servidor mantém os dados financeiros no MySQL e exige autenticação nas rotas privadas.
 
-## Requisitos
+## Requisitos e configuração
 
 - Python 3.10 ou superior.
-- MySQL 8.0.16 ou superior.
-- Um banco MySQL criado e inicializado conforme [`database/README.md`](../database/README.md).
+- MySQL 8.0.16 ou superior, inicializado conforme [`database/README.md`](../database/README.md).
 
-## Configuração local no Windows
-
-Na raiz do repositório, crie e ative um ambiente virtual e instale as dependências:
+Na raiz do repositório, crie o ambiente virtual, instale as dependências e configure o arquivo de ambiente:
 
 ```powershell
 py -3.12 -m venv backend\.venv
 .\backend\.venv\Scripts\Activate.ps1
-python -m pip install -r backend\requirements.txt
-```
-
-Copie o arquivo de exemplo e configure valores locais:
-
-```powershell
+python -m pip install -r backend\requirements-dev.txt
 Copy-Item .env.example .env
 ```
 
-Edite `.env` com duas chaves secretas independentes e a URL do seu banco. Gere uma chave aleatória para cada segredo com:
+Edite `.env` com a URL do banco e duas chaves independentes com pelo menos 32 bytes. Gere cada chave com:
 
 ```powershell
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
-Substitua `SUBSTITUA_POR_UMA_CHAVE_ALEATORIA`, `SUBSTITUA_POR_OUTRA_CHAVE_ALEATORIA` e `SUBSTITUA_A_SENHA`. Não use a senha `root` do MySQL na aplicação. Se a senha tiver caracteres especiais, codifique-os como URL antes de colocá-la em `DATABASE_URL`.
+Não use credenciais de exemplo nem a conta `root` do MySQL. `.env` está excluído do Git.
 
-`.env` contém segredos locais e está excluído pelo `.gitignore`; somente `.env.example`, sem credenciais reais, deve ser versionado.
+`DATABASE_URL` aceita `mysql+pymysql://usuario:senha@host:porta/banco`; URLs MySQL que começam com `mysql://` são ajustadas para o driver PyMySQL instalado. Quando a URL exige TLS (`ssl-mode=REQUIRED` ou `sslmode=REQUIRED`), informe também `DATABASE_SSL_CA` com o caminho do certificado CA do provedor. O backend valida o certificado e a identidade do servidor; sem o CA, a inicialização falha explicitamente.
 
-## Executar
+## Executar localmente
 
-Com o ambiente virtual ativo, o banco configurado e `.env` preenchido:
+Com o banco configurado e o ambiente virtual ativo:
 
 ```powershell
 python -m backend.run
 ```
 
-O servidor de desenvolvimento do Flask fica acessível por padrão em `http://127.0.0.1:5000`. Ele não deve ser usado como servidor de produção.
+O servidor de desenvolvimento fica em `http://127.0.0.1:5000` e não deve ser usado em produção. Para testar com o emulador Android:
 
-## API inicial
+```powershell
+python -m flask --app backend.run run --host=0.0.0.0 --port=5000
+```
 
-`GET /api/health` verifica a conexão com o banco. Se o banco estiver indisponível, a API responde com HTTP 503 e uma mensagem JSON em português.
+Use `http://10.0.2.2:5000/api` como `API_BASE_URL` no emulador. Em produção, publique a API atrás de HTTPS e use um servidor WSGI apropriado.
 
-Erros HTTP e falhas inesperadas também são retornados em JSON. Detalhes de exceções internas são registrados no log do servidor, mas não enviados ao cliente. Corpos de requisição JSON são limitados a 1 MiB.
+## Endpoints
 
-## Contas e vendas
+- `GET /api/health`: verifica a conexão com o banco.
+- `POST /api/usuarios`: cria uma conta e suas categorias iniciais.
+- `POST /api/auth/login`: valida e-mail/senha e retorna um token JWT Bearer com validade de 30 minutos.
+- `GET /api/categorias/gastos` e `POST /api/categorias/gastos`: lista ou cria categorias da conta.
+- `/api/vendas`: `GET` lista, `POST` cria, `GET /<id>` consulta, `PUT /<id>` edita e `DELETE /<id>` exclui vendas.
+- `/api/gastos`: `GET` lista, `POST` cria, `GET /<id>` consulta, `PUT /<id>` edita e `DELETE /<id>` exclui gastos.
+- `GET /api/relatorios/hoje` e `GET /api/relatorios/ontem`: totais e lançamentos do dia no fuso configurado.
+- `GET /api/relatorios/dia?data=AAAA-MM-DD`: relatório de um dia.
+- `GET /api/relatorios/periodo?inicio=AAAA-MM-DD&fim=AAAA-MM-DD`: período inclusivo.
+- `GET /api/relatorios/mes/<ano>/<mes>`: resumo e lançamentos do mês.
+- `GET /api/dashboard`: resumos de hoje e do mês e séries diárias/mensais para os gráficos.
 
-- `POST /api/usuarios`: cria uma conta e suas categorias padrão. Senhas são armazenadas com hash; o endpoint não retorna a senha. Campos: `nome`, `email` e `senha`.
-- `POST /api/auth/login`: valida e-mail e senha e retorna um token Bearer com validade de 30 minutos.
-- `GET /api/vendas`: lista as vendas da conta autenticada.
-- `GET /api/vendas/<id>`: consulta uma venda pertencente à conta autenticada.
-- `POST /api/vendas`: cadastra uma venda com `descricao`, `valor`, `data_venda`, `hora_venda`, `forma_pagamento` e `observacao` opcional.
-- `GET /api/categorias/gastos`: lista as categorias ativas da conta.
-- `POST /api/categorias/gastos`: cria uma categoria adicional informando `nome`.
-- `GET /api/gastos`: lista os gastos da conta autenticada.
-- `GET /api/gastos/<id>`: consulta um gasto pertencente à conta autenticada.
-- `POST /api/gastos`: cadastra um gasto com `descricao`, `categoria_id`, `valor`, `data_gasto`, `hora_gasto` e `observacao` opcional. O `categoria_id` deve vir da lista de categorias da conta.
-- `GET /api/relatorios/hoje`: apresenta as movimentações e os totais de hoje no fuso configurado.
-- `GET /api/relatorios/ontem`: apresenta as movimentações e os totais do dia anterior no mesmo fuso.
-- `GET /api/relatorios/dia?data=AAAA-MM-DD`: consulta um dia específico.
-- `GET /api/relatorios/periodo?inicio=AAAA-MM-DD&fim=AAAA-MM-DD`: consulta um intervalo com as duas datas incluídas.
-- `GET /api/relatorios/mes/<ano>/<mes>`: consulta o resumo e os lançamentos cronológicos de um mês.
-- `GET /api/dashboard`: retorna os resumos de hoje e do mês atual, além das séries diárias e da evolução dos últimos seis meses.
+As listagens de vendas aceitam os parâmetros opcionais `inicio`, `fim` e `forma_pagamento`. As listagens de gastos aceitam `inicio`, `fim` e `categoria_id`. Os limites de data são inclusivos e usam `AAAA-MM-DD`.
 
-As rotas de vendas exigem `Authorization: Bearer <token>`. O campo `valor` deve ser enviado como texto decimal (por exemplo, `"850.00"`), evitando perda de precisão; valores iguais a zero, negativos ou com mais de duas casas decimais são rejeitados. Atualização e exclusão serão adicionadas na etapa prevista no plano.
-
-Todas as rotas privadas exigem `Authorization: Bearer <token>`. A API confere a conta do token em cada consulta e não aceita categorias de outra conta. Formas de pagamento aceitas: `dinheiro`, `pix`, `cartao_debito`, `cartao_credito` e `outro`. A data deve usar `AAAA-MM-DD`; o horário deve usar `HH:MM` ou `HH:MM:SS`.
-
-## Cálculos financeiros
-
-O serviço `backend.app.services.financial.calculate_financial_summary` calcula os totais de vendas e gastos com `Decimal`, além do faturamento bruto, resultado líquido e quantidades. O intervalo interno usa início inclusivo e fim exclusivo, e todos os cálculos são restritos à conta autenticada. Os relatórios diários, mensais e o dashboard usam esse serviço; o dashboard também fornece dados agregados para gráficos diários e para os últimos seis meses.
+Rotas privadas usam `Authorization: Bearer <token>`. Senhas são armazenadas com hash; as consultas são limitadas à conta autenticada. Formas de pagamento aceitas: `dinheiro`, `pix`, `cartao_debito`, `cartao_credito` e `outro`. O campo `valor` deve ser enviado como texto decimal (por exemplo, `"850.00"`); valores não positivos ou com mais de duas casas são rejeitados.
 
 ## Testes
 
-Instale as dependências de desenvolvimento e execute os testes da API:
-
 ```powershell
-python -m pip install -r backend\requirements-dev.txt
 python -m pytest backend\tests
 ```
 
-Os testes usam SQLite em memória para isolar a camada HTTP e não substituem os testes de integração com MySQL. As configurações `FLASK_SECRET_KEY`, `JWT_SECRET_KEY` e `DATABASE_URL` são obrigatórias ao iniciar normalmente; a fábrica permite substituí-las explicitamente em testes.
+Os testes HTTP usam SQLite em memória e não substituem a validação de integração com MySQL. As configurações `FLASK_SECRET_KEY`, `JWT_SECRET_KEY` e `DATABASE_URL` são obrigatórias para iniciar a API normalmente.
 
-## Validação executada
+## Validação
 
-Os 55 testes automatizados passaram. Os fluxos de conta, login, vendas, categorias, gastos, cálculo financeiro, relatórios e dashboard foram validados. Relatórios mensais e agregações gráficas também foram exercitados contra MySQL 8.0.45; as instâncias temporárias foram encerradas e seus dados removidos.
+Os testes automatizados cobrem cadastro, autenticação, isolamento por conta, validação, vendas, gastos, categorias, edição/exclusão, filtros, cálculos, relatórios e dashboard. Os fluxos financeiros e os relatórios também foram exercitados em instâncias MySQL 8.0.45 temporárias e isoladas.

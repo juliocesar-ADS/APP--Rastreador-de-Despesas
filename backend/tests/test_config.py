@@ -1,6 +1,7 @@
 import pytest
 
 from backend.app import create_app
+from backend.app.config import load_config
 
 
 @pytest.mark.parametrize(
@@ -34,3 +35,34 @@ def test_app_rejects_unknown_business_timezone():
                 "APP_TIMEZONE": "America/Desconhecida",
             }
         )
+
+
+def test_mysql_urls_use_the_installed_pymysql_driver(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "mysql://app:senha@db.example.com:25060/aplicativo_gastos?ssl-mode=REQUIRED",
+    )
+    monkeypatch.setenv("DATABASE_SSL_CA", "/etc/ssl/mysql-ca.pem")
+
+    config = load_config()
+
+    assert (
+        config["SQLALCHEMY_DATABASE_URI"]
+        == "mysql+pymysql://app:senha@db.example.com:25060/aplicativo_gastos"
+    )
+    assert config["SQLALCHEMY_ENGINE_OPTIONS"]["connect_args"] == {
+        "ssl": {"ca": "/etc/ssl/mysql-ca.pem"},
+        "ssl_verify_cert": True,
+        "ssl_verify_identity": True,
+    }
+
+
+def test_tls_mysql_url_requires_a_ca_certificate(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "mysql://app:senha@db.example.com:25060/aplicativo_gastos?sslmode=REQUIRED",
+    )
+    monkeypatch.delenv("DATABASE_SSL_CA", raising=False)
+
+    with pytest.raises(RuntimeError, match="DATABASE_SSL_CA"):
+        load_config()

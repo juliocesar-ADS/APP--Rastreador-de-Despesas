@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 
-from flask import url_for
+from flask import request, url_for
 from flask_jwt_extended import jwt_required
 from sqlalchemy import text
 from werkzeug.exceptions import NotFound
@@ -14,6 +14,7 @@ from backend.app.api.validation import (
     parse_business_date,
     parse_business_time,
     parse_description,
+    parse_optional_date_range,
 )
 from backend.app.extensions import db
 from backend.app.services.serializers import serialize_sale
@@ -88,14 +89,36 @@ def _find_sale(sale_id: int, user_id: int) -> Mapping[str, object]:
 @api_bp.get("/vendas")
 @jwt_required()
 def list_sales() -> dict[str, list[dict[str, object]]]:
+    user_id = current_user_id()
+    start_date, end_date = parse_optional_date_range(request.args)
+    conditions = ["usuario_id = :usuario_id"]
+    params: dict[str, object] = {"usuario_id": user_id}
+    if start_date is not None:
+        conditions.append("data_venda >= :inicio")
+        params["inicio"] = start_date
+    if end_date is not None:
+        conditions.append("data_venda <= :fim")
+        params["fim"] = end_date
+    payment_method = request.args.get("forma_pagamento")
+    if payment_method is not None:
+        if payment_method not in PAYMENT_METHODS:
+            raise ApiError(
+                422,
+                "forma_pagamento_invalida",
+                "Selecione uma forma de pagamento válida.",
+            )
+        conditions.append("forma_pagamento = :forma_pagamento")
+        params["forma_pagamento"] = payment_method
+
     sales = db.session.execute(
         text(
             "SELECT id, descricao, valor, data_venda, hora_venda, "
             "forma_pagamento, observacao "
-            "FROM vendas WHERE usuario_id = :usuario_id "
-            "ORDER BY data_venda DESC, hora_venda DESC, id DESC"
+            "FROM vendas WHERE "
+            + " AND ".join(conditions)
+            + " ORDER BY data_venda DESC, hora_venda DESC, id DESC"
         ),
-        {"usuario_id": current_user_id()},
+        params,
     ).mappings().all()
 
     return {"dados": [serialize_sale(sale) for sale in sales]}
@@ -132,3 +155,36 @@ def create_sale() -> tuple[dict[str, object], int, dict[str, str]]:
         201,
         {"Location": url_for("api.get_sale", sale_id=sale_id)},
     )
+
+
+@api_bp.put("/vendas/<int:sale_id>")
+@jwt_required()
+def update_sale(sale_id: int) -> dict[str, object]:
+    user_id = current_user_id()
+    _find_sale(sale_id, user_id)
+    sale = _parse_sale(require_json_object())
+    db.session.execute(
+        text(
+            "UPDATE vendas SET descricao = :descricao, valor = :valor, "
+            "data_venda = :data_venda, hora_venda = :hora_venda, "
+            "forma_pagamento = :forma_pagamento, observacao = :observacao "
+            "WHERE id = :id AND usuario_id = :usuario_id"
+        ),
+        {"id": sale_id, "usuario_id": user_id, **sale},
+    )
+    db.session.commit()
+    return serialize_sale(_find_sale(sale_id, user_id))
+
+
+@api_bp.delete("/vendas/<int:sale_id>")
+@jwt_required()
+def delete_sale(sale_id: int) -> tuple[str, int]:
+    result = db.session.execute(
+        text("DELETE FROM vendas WHERE id = :id AND usuario_id = :usuario_id"),
+        {"id": sale_id, "usuario_id": current_user_id()},
+    )
+    if result.rowcount != 1:
+        db.session.rollback()
+        raise NotFound()
+    db.session.commit()
+    return "", 204

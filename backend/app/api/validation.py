@@ -1,4 +1,5 @@
 import re
+from collections.abc import Mapping
 from datetime import date, time, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -64,6 +65,24 @@ def parse_business_date(value: object) -> str:
         return date.fromisoformat(value).isoformat()
     except ValueError as error:
         raise ApiError(422, "data_invalida", "A data informada não existe.") from error
+
+
+def parse_optional_date_range(
+    params: Mapping[str, str],
+) -> tuple[str | None, str | None]:
+    start_date = params.get("inicio")
+    end_date = params.get("fim")
+    if start_date is not None:
+        start_date = parse_business_date(start_date)
+    if end_date is not None:
+        end_date = parse_business_date(end_date)
+    if start_date is not None and end_date is not None and start_date > end_date:
+        raise ApiError(
+            422,
+            "periodo_invalido",
+            "A data inicial deve ser igual ou anterior à data final.",
+        )
+    return start_date, end_date
 
 
 def parse_business_time(value: object) -> str:

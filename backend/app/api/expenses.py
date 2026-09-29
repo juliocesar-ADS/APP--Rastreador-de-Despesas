@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 
-from flask import url_for
+from flask import request, url_for
 from flask_jwt_extended import jwt_required
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -15,6 +15,7 @@ from backend.app.api.validation import (
     parse_business_date,
     parse_business_time,
     parse_description,
+    parse_optional_date_range,
 )
 from backend.app.extensions import db
 from backend.app.services.serializers import serialize_expense
@@ -147,6 +148,32 @@ def create_expense_category() -> tuple[dict[str, object], int]:
 @api_bp.get("/gastos")
 @jwt_required()
 def list_expenses() -> dict[str, list[dict[str, object]]]:
+    user_id = current_user_id()
+    start_date, end_date = parse_optional_date_range(request.args)
+    conditions = ["g.usuario_id = :usuario_id"]
+    params: dict[str, object] = {"usuario_id": user_id}
+    if start_date is not None:
+        conditions.append("g.data_gasto >= :inicio")
+        params["inicio"] = start_date
+    if end_date is not None:
+        conditions.append("g.data_gasto <= :fim")
+        params["fim"] = end_date
+
+    category_id = request.args.get("categoria_id")
+    if category_id is not None:
+        if (
+            not category_id.isascii()
+            or not category_id.isdecimal()
+            or int(category_id) <= 0
+        ):
+            raise ApiError(
+                422,
+                "categoria_invalida",
+                "Selecione uma categoria de gasto válida.",
+            )
+        conditions.append("g.categoria_id = :categoria_id")
+        params["categoria_id"] = int(category_id)
+
     expenses = db.session.execute(
         text(
             "SELECT g.id, g.descricao, g.categoria_id, c.nome AS categoria_nome, "
@@ -154,10 +181,11 @@ def list_expenses() -> dict[str, list[dict[str, object]]]:
             "FROM gastos AS g "
             "JOIN categorias_gastos AS c "
             "ON c.id = g.categoria_id AND c.usuario_id = g.usuario_id "
-            "WHERE g.usuario_id = :usuario_id "
-            "ORDER BY g.data_gasto DESC, g.hora_gasto DESC, g.id DESC"
+            "WHERE "
+            + " AND ".join(conditions)
+            + " ORDER BY g.data_gasto DESC, g.hora_gasto DESC, g.id DESC"
         ),
-        {"usuario_id": current_user_id()},
+        params,
     ).mappings().all()
 
     return {"dados": [serialize_expense(expense) for expense in expenses]}
@@ -213,3 +241,50 @@ def create_expense() -> tuple[dict[str, object], int, dict[str, str]]:
         201,
         {"Location": url_for("api.get_expense", expense_id=expense_id)},
     )
+
+
+@api_bp.put("/gastos/<int:expense_id>")
+@jwt_required()
+def update_expense(expense_id: int) -> dict[str, object]:
+    user_id = current_user_id()
+    _find_expense(expense_id, user_id)
+    expense = _parse_expense(require_json_object())
+    category = db.session.execute(
+        text(
+            "SELECT id FROM categorias_gastos "
+            "WHERE id = :categoria_id AND usuario_id = :usuario_id AND ativa = TRUE"
+        ),
+        {"categoria_id": expense["categoria_id"], "usuario_id": user_id},
+    ).mappings().first()
+    if category is None:
+        raise ApiError(
+            422,
+            "categoria_indisponivel",
+            "A categoria não existe ou não está disponível na sua conta.",
+        )
+
+    db.session.execute(
+        text(
+            "UPDATE gastos SET categoria_id = :categoria_id, descricao = :descricao, "
+            "valor = :valor, data_gasto = :data_gasto, hora_gasto = :hora_gasto, "
+            "observacao = :observacao "
+            "WHERE id = :id AND usuario_id = :usuario_id"
+        ),
+        {"id": expense_id, "usuario_id": user_id, **expense},
+    )
+    db.session.commit()
+    return serialize_expense(_find_expense(expense_id, user_id))
+
+
+@api_bp.delete("/gastos/<int:expense_id>")
+@jwt_required()
+def delete_expense(expense_id: int) -> tuple[str, int]:
+    result = db.session.execute(
+        text("DELETE FROM gastos WHERE id = :id AND usuario_id = :usuario_id"),
+        {"id": expense_id, "usuario_id": current_user_id()},
+    )
+    if result.rowcount != 1:
+        db.session.rollback()
+        raise NotFound()
+    db.session.commit()
+    return "", 204
