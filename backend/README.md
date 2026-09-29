@@ -1,6 +1,6 @@
 # Backend Flask
 
-Esta etapa cria a base configurável do backend. A API de vendas, gastos, autenticação e relatórios será implementada nas etapas seguintes.
+Backend Flask da aplicação, com autenticação, vendas, gastos e categorias já disponíveis. Os endpoints de relatórios serão acrescentados nas próximas etapas.
 
 ## Requisitos
 
@@ -48,7 +48,7 @@ O servidor de desenvolvimento do Flask fica acessível por padrão em `http://12
 
 `GET /api/health` verifica a conexão com o banco. Se o banco estiver indisponível, a API responde com HTTP 503 e uma mensagem JSON em português.
 
-Erros HTTP e falhas inesperadas também são retornados em JSON. Detalhes de exceções internas são registrados no log do servidor, mas não enviados ao cliente. Corpos de requisição JSON são limitados a 1 MiB; os endpoints de negócio ainda serão acrescentados nas etapas seguintes.
+Erros HTTP e falhas inesperadas também são retornados em JSON. Detalhes de exceções internas são registrados no log do servidor, mas não enviados ao cliente. Corpos de requisição JSON são limitados a 1 MiB.
 
 ## Contas e vendas
 
@@ -67,6 +67,10 @@ As rotas de vendas exigem `Authorization: Bearer <token>`. O campo `valor` deve 
 
 Todas as rotas privadas exigem `Authorization: Bearer <token>`. A API confere a conta do token em cada consulta e não aceita categorias de outra conta. Formas de pagamento aceitas: `dinheiro`, `pix`, `cartao_debito`, `cartao_credito` e `outro`. A data deve usar `AAAA-MM-DD`; o horário deve usar `HH:MM` ou `HH:MM:SS`.
 
+## Cálculos financeiros
+
+O serviço `backend.app.services.financial.calculate_financial_summary` calcula os totais de vendas e gastos com `Decimal`, além do faturamento bruto, resultado líquido e quantidades. O intervalo usa início inclusivo e fim exclusivo, e todos os cálculos são restritos à conta informada. Os endpoints diário, mensal e dashboard serão ligados a esse serviço nas etapas seguintes.
+
 ## Testes
 
 Instale as dependências de desenvolvimento e execute os testes da API:
@@ -80,4 +84,4 @@ Os testes usam SQLite em memória para isolar a camada HTTP e não substituem os
 
 ## Validação executada
 
-Os 39 testes automatizados passaram. Os fluxos de conta, login, vendas, categorias e gastos foram exercitados contra o esquema real em uma instância MySQL 8.0.45 temporária e isolada. O valor `"120.50"` foi persistido e lido corretamente, e os horários retornaram normalizados como `HH:MM:SS`; a instância e os dados temporários foram encerrados e removidos.
+Os 46 testes automatizados passaram. Os fluxos de conta, login, vendas, categorias, gastos e cálculo financeiro foram exercitados contra o esquema real em uma instância MySQL 8.0.45 temporária e isolada. O resumo mensal de teste retornou vendas `0.30`, gastos `0.10` e resultado `0.20`; a instância e os dados temporários foram encerrados e removidos.
