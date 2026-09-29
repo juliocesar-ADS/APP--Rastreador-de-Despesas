@@ -59,3 +59,5 @@ O script não cria usuários, contas ou movimentações de demonstração. O bac
 ## Validação desta etapa
 
 Execute os comandos de verificação acima em uma instância MySQL local. Se o cliente ou servidor MySQL não estiver instalado, instale/configure o MySQL antes de validar o esquema. Ainda não há backend nesta etapa.
+
+O esquema foi carregado e exercitado em uma instância MySQL 8.0.45 temporária e isolada. Foram verificadas a criação das quatro tabelas, a soma decimal de vendas e gastos (`0,10 + 0,20 = 0,30`), a rejeição de valor zero e a rejeição de um gasto associado à categoria de outro usuário. A instância e os dados temporários foram encerrados e removidos após o teste.
