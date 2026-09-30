@@ -33,6 +33,12 @@ def _database_configuration() -> tuple[str | None, dict[str, object]]:
         return None, engine_options
 
     url = make_url(database_url)
+    
+    # SQLite: sem TLS, retornar direto
+    if url.drivername == "sqlite":
+        return url.render_as_string(hide_password=False), engine_options
+
+    # MySQL: normalizar driver e TLS
     query = dict(url.query)
     ssl_mode = query.pop("ssl-mode", None) or query.pop("sslmode", None)
     if url.drivername == "mysql":
