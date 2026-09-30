@@ -17,11 +17,11 @@ O aplicativo permite:
 
 ### Instalar uma versão pronta
 
-Quando houver uma versão publicada, abra a página de [Releases](https://github.com/juliocesar-ADS/APP--Rastreador-de-Despesas/releases), baixe o arquivo `.apk` no Android e toque nele para instalar.
+Baixe diretamente o [APK da versão 1.0.0](https://github.com/juliocesar-ADS/APP--Rastreador-de-Despesas/releases/download/v1.0.0/app-release.apk) no Android e toque no arquivo para instalar. Também é possível consultar a página de [Releases](https://github.com/juliocesar-ADS/APP--Rastreador-de-Despesas/releases) para ver outras versões.
 
 Se o Android solicitar, permita a instalação de aplicativos da fonte usada para baixar o arquivo. Ative essa permissão apenas durante a instalação.
 
-> O APK precisa ter sido configurado com uma API acessível. Se não houver uma Release disponível, siga a instalação pelo código abaixo.
+> A instalação é feita pelo link acima, mas o aplicativo precisa de uma API acessível para fazer login, salvar vendas e consultar despesas. Para usar gratuitamente sem hospedagem, siga o [guia de uso local](DEPLOYMENT_LOCAL.md) antes de compilar uma versão apontada para a sua API.
 
 ### Compilar e instalar pelo código
 
