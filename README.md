@@ -70,7 +70,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5000/api
 flutter build apk --release --dart-define=API_BASE_URL=https://seu-dominio/api
 ```
 
-O APK gerado fica em `app/build/app/outputs/flutter-apk/app-release.apk`. A distribuição pública exige primeiro implantar a API e o MySQL em um provedor externo; o GitHub não hospeda esse backend. Este repositório ainda não tem remoto GitHub nem URL de produção configurados.
+O APK gerado fica em `app/build/app/outputs/flutter-apk/app-release.apk`. A distribuição pública exige primeiro implantar a API e o MySQL em um provedor externo; o GitHub não hospeda esse backend. O código está publicado em [juliocesar-ADS/aplicativo-de-gastos](https://github.com/juliocesar-ADS/aplicativo-de-gastos), mas a URL da API de produção ainda não foi configurada.
 
 ## Endpoints principais
 
@@ -86,7 +86,7 @@ As rotas privadas recebem `Authorization: Bearer <token>`. Valores monetários d
 
 O GitHub não executa a API nem fornece um MySQL de produção. Como opção recomendada, a DigitalOcean documenta o deploy Python pelo App Platform e oferece MySQL gerenciado; o `Procfile` e o `requirements.txt` da raiz preparam o comando WSGI. Em 29/09/2026, os menores recursos consultados somavam aproximadamente **US$ 20/mês** (serviço web de US$ 5 e banco MySQL de US$ 15, sem alta disponibilidade, impostos ou excedentes). Confirme o preço antes de contratar: [planos do App Platform](https://docs.digitalocean.com/products/app-platform/details/pricing/) e [preços do MySQL](https://docs.digitalocean.com/products/databases/mysql/details/pricing/).
 
-Antes de publicar, crie o banco gerenciado, aplique [`database/schema.sql`](database/schema.sql) nele e configure no serviço as variáveis `DATABASE_URL`, `DATABASE_SSL_CA`, `FLASK_SECRET_KEY`, `JWT_SECRET_KEY`, `APP_TIMEZONE=America/Sao_Paulo` e `FLASK_DEBUG=false`. O backend aceita a URL padrão `mysql://` e seleciona PyMySQL. Para uma URL com TLS obrigatório, configure `DATABASE_SSL_CA` com o certificado do provedor; a API valida o certificado e a identidade do servidor. Restrinja o acesso ao MySQL à API, habilite HTTPS e então compile o APK com a URL de produção. Não inclua credenciais no app nem no repositório. Nenhum serviço externo foi criado: ainda é necessário definir a conta, o repositório GitHub e o domínio da API.
+Antes de disponibilizar o app para uso em produção, crie o banco gerenciado, aplique [`database/schema.sql`](database/schema.sql) nele e configure no serviço as variáveis `DATABASE_URL`, `DATABASE_SSL_CA`, `FLASK_SECRET_KEY`, `JWT_SECRET_KEY`, `APP_TIMEZONE=America/Sao_Paulo` e `FLASK_DEBUG=false`. O backend aceita a URL padrão `mysql://` e seleciona PyMySQL. Para uma URL com TLS obrigatório, configure `DATABASE_SSL_CA` com o certificado do provedor; a API valida o certificado e a identidade do servidor. Restrinja o acesso ao MySQL à API, habilite HTTPS e então compile o APK com a URL de produção. Não inclua credenciais no app nem no repositório. Nenhum serviço de produção foi criado: ainda é necessário provisionar a API e o banco e configurar o domínio da API.
 
 ## Testes
 
