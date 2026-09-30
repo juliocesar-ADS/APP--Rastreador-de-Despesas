@@ -70,7 +70,7 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5000/api
 flutter build apk --release --dart-define=API_BASE_URL=https://seu-dominio/api
 ```
 
-O APK gerado fica em `app/build/app/outputs/flutter-apk/app-release.apk`. A distribuição pública exige primeiro implantar a API e o MySQL em um provedor externo; o GitHub não hospeda esse backend. O código está publicado em [juliocesar-ADS/aplicativo-de-gastos](https://github.com/juliocesar-ADS/aplicativo-de-gastos), mas a URL da API de produção ainda não foi configurada.
+O APK gerado fica em `app/build/app/outputs/flutter-apk/app-release.apk`. A distribuição pública exige primeiro implantar a API e o MySQL em um provedor externo; o GitHub não hospeda esse backend. O código está publicado em [juliocesar-ADS/APP--Rastreador-de-Despesas](https://github.com/juliocesar-ADS/APP--Rastreador-de-Despesas), mas a URL da API de produção ainda não foi configurada.
 
 ## Endpoints principais
 
