@@ -1,106 +1,219 @@
 # Controle de Gastos
 
-Aplicativo Android em português brasileiro para registrar vendas e gastos, acompanhar o resultado líquido e consultar relatórios. A solução usa Flutter/Dart, API REST Flask e banco MySQL; lançamentos e totais vêm do servidor, sem dados de demonstração ou sincronização offline.
+Aplicativo Android em português brasileiro para registrar vendas e gastos, acompanhar o resultado líquido e consultar relatórios.
+
+O projeto contém:
+
+- aplicativo Android feito com Flutter;
+- API REST feita com Flask;
+- banco de dados MySQL para ambientes com servidor;
+- suporte a SQLite para uso local e pessoal;
+- testes automatizados do backend e do aplicativo.
+
+## Importante antes de instalar
+
+Este repositório contém o **código-fonte**, não um APK pronto anexado ao GitHub. Portanto, há duas formas de usar o aplicativo:
+
+1. baixar um APK publicado na área **Releases**, quando existir;
+2. compilar o APK seguindo as instruções deste documento.
+
+O aplicativo precisa de uma API para funcionar. A API não é hospedada pelo GitHub. Para usar sem pagar hospedagem, execute a API localmente com SQLite, conforme a seção [Uso gratuito e local](#uso-gratuito-e-local).
 
 ## Funcionalidades
 
-- Cadastro de conta, login e token de acesso guardado no armazenamento seguro do Android.
-- Painel com faturamento, gastos e resultado líquido de hoje e do mês.
-- Gráficos de vendas e gastos por dia e evolução dos últimos seis meses.
-- Cadastro, edição, consulta e exclusão de vendas e gastos.
-- Categorias de gastos, formas de pagamento e histórico com filtro de período.
-- Relatórios mensais com os lançamentos correspondentes.
-- API com valores decimais exatos, autenticação e isolamento de dados por usuário.
+- cadastro e login de usuários;
+- painel com faturamento, gastos e resultado líquido;
+- gráficos por dia e evolução dos últimos seis meses;
+- cadastro, edição, consulta e exclusão de vendas e gastos;
+- categorias de gastos e formas de pagamento;
+- histórico com filtros de período;
+- relatórios mensais;
+- autenticação por token e isolamento dos dados entre usuários.
 
-## Estrutura
+## Estrutura do repositório
 
-- `app/`: aplicativo Flutter para Android.
-- `backend/`: API REST Flask.
-- `database/`: esquema MySQL.
-- `docs/`: decisões de arquitetura.
-
-## Banco de dados e API local
-
-Requisitos: Python 3.10+, MySQL 8.0.16+ e um banco criado conforme [`database/README.md`](database/README.md).
-
-Na raiz do repositório, no PowerShell:
-
-```powershell
-py -3.12 -m venv backend\.venv
-.\backend\.venv\Scripts\Activate.ps1
-python -m pip install -r backend\requirements-dev.txt
-Copy-Item .env.example .env
+```text
+app/       Aplicativo Flutter para Android
+backend/   API REST Flask
+database/  Schema e documentação do banco
+docs/      Decisões de arquitetura
 ```
 
-Edite `.env` com as credenciais do MySQL e duas chaves aleatórias independentes. Gere cada chave com `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Nunca use os valores de exemplo em produção nem versione `.env`.
+## Opção 1: instalar um APK publicado
 
-Para iniciar o servidor de desenvolvimento:
+Quando houver um APK publicado, acesse a aba [Releases](https://github.com/juliocesar-ADS/APP--Rastreador-de-Despesas/releases), baixe o arquivo `.apk` no Android e abra-o para instalar.
 
-```powershell
-python -m backend.run
-```
+O Android pode solicitar autorização para instalar aplicativos de fontes desconhecidas. Habilite essa permissão somente para o navegador ou gerenciador de arquivos usado para abrir o APK e desative-a depois da instalação.
 
-O endereço local padrão é `http://127.0.0.1:5000`. Para acessar pelo emulador Android, inicie a API vinculada à rede local:
+Um APK só funciona corretamente quando foi compilado com uma URL de API acessível pelo aparelho. Se não houver uma Release publicada ou uma API configurada, use a opção 2.
 
-```powershell
-python -m flask --app backend.run run --host=0.0.0.0 --port=5000
-```
+## Opção 2: compilar o aplicativo pelo código
 
-O emulador Android acessa a máquina hospedeira em `10.0.2.2`. A permissão para tráfego HTTP sem TLS existe apenas na configuração de depuração do Android; builds de produção devem usar HTTPS. Não exponha o servidor Flask de desenvolvimento na internet.
+### Requisitos
 
-## Aplicativo Android
+- Flutter estável;
+- JDK 17;
+- Android SDK com as licenças aceitas;
+- um computador Windows, macOS ou Linux;
+- um celular Android ou emulador para testar.
 
-Instale Flutter estável, JDK 17 e Android SDK. No diretório `app/`, instale as dependências e execute a análise e os testes:
+Na pasta do projeto, execute:
 
-```powershell
+```bash
+cd app
 flutter pub get
 flutter analyze
 flutter test
 ```
 
-Inicie o app no emulador apontando para a API local:
+Para gerar um APK:
 
-```powershell
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5000/api
+```bash
+flutter build apk --release \
+  --dart-define=API_BASE_URL=https://SEU-ENDERECO/api
 ```
 
-`API_BASE_URL` deve terminar em `/api`. Para compilar uma versão de produção, use a URL HTTPS da API implantada:
+No Windows PowerShell, use o comando em uma linha:
 
 ```powershell
-flutter build apk --release --dart-define=API_BASE_URL=https://seu-dominio/api
+flutter build apk --release --dart-define=API_BASE_URL=https://SEU-ENDERECO/api
 ```
 
-O APK gerado fica em `app/build/app/outputs/flutter-apk/app-release.apk`. A distribuição pública exige primeiro implantar a API e o MySQL em um provedor externo; o GitHub não hospeda esse backend. O código está publicado em [juliocesar-ADS/APP--Rastreador-de-Despesas](https://github.com/juliocesar-ADS/APP--Rastreador-de-Despesas), mas a URL da API de produção ainda não foi configurada.
+O arquivo gerado ficará em:
 
-## Endpoints principais
+```text
+app/build/app/outputs/flutter-apk/app-release.apk
+```
 
-- `POST /api/usuarios` e `POST /api/auth/login`: cadastro e autenticação.
-- `/api/vendas`: listar, filtrar, cadastrar, editar e excluir vendas.
-- `/api/gastos` e `/api/categorias/gastos`: gastos e categorias da conta.
-- `/api/relatorios/hoje`, `/api/relatorios/ontem`, `/api/relatorios/dia`, `/api/relatorios/periodo` e `/api/relatorios/mes/<ano>/<mes>`: relatórios.
-- `GET /api/dashboard`: resumos e séries para os gráficos.
+Transfira esse arquivo para o celular e abra-o para instalar.
 
-As rotas privadas recebem `Authorization: Bearer <token>`. Valores monetários devem ser enviados como texto decimal com até duas casas, por exemplo `"850.00"`.
+> A URL informada em `API_BASE_URL` deve terminar em `/api` e precisa estar acessível pelo celular. Não use `localhost` no APK instalado no celular para acessar uma API que está no computador.
 
-## Hospedagem de produção
+## Uso gratuito e local
 
-O GitHub não executa a API nem fornece um MySQL de produção. Como opção recomendada, a DigitalOcean documenta o deploy Python pelo App Platform e oferece MySQL gerenciado; o `Procfile` e o `requirements.txt` da raiz preparam o comando WSGI. Em 29/09/2026, os menores recursos consultados somavam aproximadamente **US$ 20/mês** (serviço web de US$ 5 e banco MySQL de US$ 15, sem alta disponibilidade, impostos ou excedentes). Confirme o preço antes de contratar: [planos do App Platform](https://docs.digitalocean.com/products/app-platform/details/pricing/) e [preços do MySQL](https://docs.digitalocean.com/products/databases/mysql/details/pricing/).
+Para não contratar hospedagem, é possível executar a API no próprio Android usando Termux e SQLite. Nesse cenário:
 
-Antes de disponibilizar o app para uso em produção, crie o banco gerenciado, aplique [`database/schema.sql`](database/schema.sql) nele e configure no serviço as variáveis `DATABASE_URL`, `DATABASE_SSL_CA`, `FLASK_SECRET_KEY`, `JWT_SECRET_KEY`, `APP_TIMEZONE=America/Sao_Paulo` e `FLASK_DEBUG=false`. O backend aceita a URL padrão `mysql://` e seleciona PyMySQL. Para uma URL com TLS obrigatório, configure `DATABASE_SSL_CA` com o certificado do provedor; a API valida o certificado e a identidade do servidor. Restrinja o acesso ao MySQL à API, habilite HTTPS e então compile o APK com a URL de produção. Não inclua credenciais no app nem no repositório. Nenhum serviço de produção foi criado: ainda é necessário provisionar a API e o banco e configurar o domínio da API.
+- os dados ficam no arquivo SQLite local do dispositivo;
+- não há servidor MySQL remoto;
+- o aplicativo depende da API estar em execução no Termux;
+- o uso é indicado para uma pessoa ou para testes;
+- não há backup automático nem sincronização entre aparelhos.
+
+O passo a passo completo está em [DEPLOYMENT_LOCAL.md](DEPLOYMENT_LOCAL.md).
+
+Resumo do fluxo:
+
+1. instalar o Termux;
+2. clonar este repositório no Termux;
+3. criar o banco SQLite e o ambiente Python;
+4. iniciar a API Flask;
+5. compilar o APK apontando `API_BASE_URL` para o endereço local do Android;
+6. instalar o APK no mesmo aparelho.
+
+Para uso local em um emulador Android, a API pode ser executada no computador e o app pode usar:
+
+```text
+http://10.0.2.2:5000/api
+```
+
+Para um celular físico, computador e celular precisam estar na mesma rede Wi-Fi e o APK deve usar o IP local do computador, por exemplo:
+
+```text
+http://192.168.0.10:5000/api
+```
+
+O endereço exato varia conforme a rede. A API deve ser iniciada escutando na rede local:
+
+```bash
+python -m flask --app backend.run run --host=0.0.0.0 --port=5000
+```
+
+Não exponha essa API de desenvolvimento diretamente na internet.
+
+## Executar o backend localmente
+
+### Requisitos
+
+- Python 3.10 ou superior;
+- SQLite para uso local ou MySQL 8.0.16 ou superior para servidor.
+
+Crie um ambiente virtual e instale as dependências:
+
+```powershell
+py -3.12 -m venv backend\.venv
+backend\.venv\Scripts\python.exe -m pip install -r backend\requirements-dev.txt
+Copy-Item .env.example .env
+```
+
+Edite `.env` e defina duas chaves secretas diferentes. Elas podem ser geradas com:
+
+```powershell
+backend\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Para SQLite local, use:
+
+```dotenv
+DATABASE_URL=sqlite:///aplicativo_gastos.db
+APP_TIMEZONE=America/Sao_Paulo
+FLASK_DEBUG=true
+```
+
+O schema usado pelo SQLite local está documentado em [DEPLOYMENT_LOCAL.md](DEPLOYMENT_LOCAL.md). Para MySQL, consulte [database/README.md](database/README.md) e [database/schema.sql](database/schema.sql).
+
+Inicie a API:
+
+```powershell
+backend\.venv\Scripts\python.exe -m backend.run
+```
+
+A API ficará disponível em `http://127.0.0.1:5000`.
 
 ## Testes
 
-Na raiz do repositório, com o ambiente virtual ativo:
+Backend:
 
 ```powershell
-python -m pytest backend\tests
+backend\.venv\Scripts\python.exe -m pytest backend\tests
 ```
 
-No diretório `app/`:
+Flutter:
 
 ```powershell
+cd app
 flutter analyze
 flutter test
 ```
 
-Os testes automatizados do backend usam SQLite em memória; testes de integração com MySQL são descritos em [`backend/README.md`](backend/README.md).
+## API
+
+Principais endpoints:
+
+- `POST /api/usuarios`: cadastro;
+- `POST /api/auth/login`: login;
+- `/api/vendas`: vendas;
+- `/api/gastos`: gastos;
+- `/api/categorias/gastos`: categorias;
+- `/api/relatorios/...`: relatórios;
+- `GET /api/dashboard`: painel financeiro.
+
+Rotas privadas exigem o cabeçalho `Authorization` com o token recebido no login. Valores monetários devem ser enviados como texto decimal com até duas casas, por exemplo `"850.00"`.
+
+## Produção e segurança
+
+O setup local é destinado a uso pessoal e desenvolvimento. Para disponibilizar o sistema para várias pessoas, é necessário hospedar a API e o banco em um provedor externo, usar HTTPS, configurar segredos fora do Git e compilar o APK com a URL de produção.
+
+Não versione:
+
+- `.env`;
+- senhas;
+- tokens;
+- certificados privados;
+- chaves de assinatura do Android.
+
+Consulte também:
+
+- [app/README.md](app/README.md)
+- [backend/README.md](backend/README.md)
+- [database/README.md](database/README.md)
+- [DEPLOYMENT_LOCAL.md](DEPLOYMENT_LOCAL.md)

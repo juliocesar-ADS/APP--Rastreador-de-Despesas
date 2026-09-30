@@ -1,22 +1,38 @@
 # Aplicativo Flutter
 
-App Android em português brasileiro para registrar vendas e gastos, ver o resultado financeiro e consultar o histórico e relatórios. As telas usam a API Flask; não há dados de demonstração nem operação offline.
+Aplicativo Android em português brasileiro para registrar vendas e gastos, consultar o histórico e visualizar relatórios. O aplicativo consome a API Flask configurada pela variável `API_BASE_URL`.
 
-Consulte o [README principal](../README.md) para preparar o banco, executar a API, configurar o ambiente Android e entender os passos de hospedagem.
+Consulte o [README principal](../README.md) para saber como instalar, executar a API localmente e compilar o APK.
 
-## Desenvolvimento
+## Requisitos de desenvolvimento
 
-Requisitos: Flutter estável, JDK 17 e Android SDK.
+- Flutter estável;
+- JDK 17;
+- Android SDK;
+- dispositivo Android ou emulador.
 
-```powershell
+## Instalar dependências e validar o projeto
+
+```bash
 flutter pub get
 flutter analyze
 flutter test
+```
+
+## Executar durante o desenvolvimento
+
+Informe a URL da API terminando em `/api`:
+
+```bash
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5000/api
 ```
 
-O endereço `10.0.2.2` serve para o emulador Android acessar a máquina hospedeira. Para produção, compile com a URL HTTPS da API:
+`10.0.2.2` é o endereço usado por um emulador Android para acessar a API executada no computador. Em um celular físico, substitua pelo IP do computador na rede local.
 
-```powershell
-flutter build apk --release --dart-define=API_BASE_URL=https://seu-dominio/api
+## Gerar APK
+
+```bash
+flutter build apk --release --dart-define=API_BASE_URL=https://SEU-ENDERECO/api
 ```
+
+O APK ficará em `build/app/outputs/flutter-apk/app-release.apk`.
