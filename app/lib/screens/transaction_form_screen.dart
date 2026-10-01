@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
-import '../api/api_client.dart';
+import '../data/local_store.dart';
 import '../models.dart';
 
 class TransactionFormScreen extends StatefulWidget {
   const TransactionFormScreen({
     super.key,
-    required this.api,
+    required this.store,
     required this.isSale,
     this.initial,
   });
 
-  final ApiClient api;
+  final LocalStore store;
   final bool isSale;
   final Movimentacao? initial;
 
@@ -54,7 +54,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           );
     _paymentMethod = initial?.paymentMethod ?? 'dinheiro';
     _categoryId = initial?.categoryId;
-    _categories = widget.api.categories();
+    _categories = widget.store.categories();
   }
 
   @override
@@ -120,15 +120,15 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
     setState(() => _error = null);
     try {
-      final created = await widget.api.createExpenseCategory(name);
-      final categories = await widget.api.categories();
+      final created = await widget.store.createExpenseCategory(name);
+      final categories = await widget.store.categories();
       if (mounted) {
         setState(() {
           _categoryId = created['id']! as int;
           _categories = Future.value(categories);
         });
       }
-    } on ApiException catch (error) {
+    } on LocalStoreException catch (error) {
       if (mounted) setState(() => _error = error.message);
     }
   }
@@ -184,14 +184,14 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     };
     try {
       if (widget.isSale) {
-        await widget.api.saveSale({
+        await widget.store.saveSale({
           ...common,
           'data_venda': date,
           'hora_venda': time,
           'forma_pagamento': _paymentMethod,
         }, id: widget.initial?.id);
       } else {
-        await widget.api.saveExpense({
+        await widget.store.saveExpense({
           ...common,
           'categoria_id': _categoryId,
           'data_gasto': date,
@@ -199,7 +199,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         }, id: widget.initial?.id);
       }
       if (mounted) Navigator.pop(context, true);
-    } on ApiException catch (error) {
+    } on LocalStoreException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } on Exception catch (error) {
       if (mounted) setState(() => _error = error.toString());
@@ -284,7 +284,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       return _CategoryError(
                         error: snapshot.error!,
                         onRetry: () => setState(
-                          () => _categories = widget.api.categories(),
+                          () => _categories = widget.store.categories(),
                         ),
                       );
                     }

@@ -1,38 +1,20 @@
 # Aplicativo Flutter
 
-Aplicativo Android em português brasileiro para registrar vendas e gastos, consultar o histórico e visualizar relatórios. O aplicativo consome a API Flask configurada pela variável `API_BASE_URL`.
+O aplicativo funciona offline e grava os dados no SQLite privado do Android. Não utiliza a API Flask, não requer login nem acesso à internet.
 
-Consulte o [README principal](../README.md) para saber como instalar, executar a API localmente e compilar o APK.
+Para instalar no Android 7.0 ou superior, abra o [link direto do APK mais recente](https://github.com/juliocesar-ADS/APP--Rastreador-de-Despesas/releases/latest/download/app-release.apk), baixe o arquivo e toque em **Instalar**. O Android pode pedir autorização para instalar o arquivo baixado pelo navegador; essa confirmação é uma proteção do sistema.
 
-## Requisitos de desenvolvimento
+## Desenvolvimento
 
-- Flutter estável;
-- JDK 17;
-- Android SDK;
-- dispositivo Android ou emulador.
-
-## Instalar dependências e validar o projeto
+Requisitos: Flutter estável, JDK 17 e Android SDK.
 
 ```bash
 flutter pub get
 flutter analyze
 flutter test
+flutter build apk --release
 ```
 
-## Executar durante o desenvolvimento
+O APK gerado fica em `build/app/outputs/flutter-apk/app-release.apk`.
 
-Informe a URL da API terminando em `/api`:
-
-```bash
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5000/api
-```
-
-`10.0.2.2` é o endereço usado por um emulador Android para acessar a API executada no computador. Em um celular físico, substitua pelo IP do computador na rede local.
-
-## Gerar APK
-
-```bash
-flutter build apk --release --dart-define=API_BASE_URL=https://SEU-ENDERECO/api
-```
-
-O APK ficará em `build/app/outputs/flutter-apk/app-release.apk`.
+O banco é local ao aplicativo. Desinstalá-lo pode apagar todos os lançamentos; não há sincronização ou backup em nuvem.

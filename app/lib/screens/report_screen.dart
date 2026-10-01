@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../api/api_client.dart';
+import '../data/local_store.dart';
 import '../models.dart';
 import '../widgets/summary_card.dart';
 import '../widgets/transaction_tile.dart';
@@ -9,12 +9,12 @@ import '../widgets/transaction_tile.dart';
 class MonthlyReportScreen extends StatefulWidget {
   const MonthlyReportScreen({
     super.key,
-    required this.api,
+    required this.store,
     required this.onEdit,
     required this.onDelete,
   });
 
-  final ApiClient api;
+  final LocalStore store;
   final ValueChanged<Movimentacao> onEdit;
   final ValueChanged<Movimentacao> onDelete;
 
@@ -35,7 +35,7 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
   }
 
   Future<Map<String, Object?>> _load() =>
-      widget.api.monthlyReport(_month.year, _month.month);
+      widget.store.monthlyReport(_month.year, _month.month);
 
   Future<void> _changeMonth(int offset) async {
     setState(() {

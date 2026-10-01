@@ -12,6 +12,9 @@ venv/
 .pytest_cache/
 .coverage
 htmlcov/
+*.db
+*.sqlite
+*.sqlite3
 
 # Flutter / Dart
 .dart_tool/

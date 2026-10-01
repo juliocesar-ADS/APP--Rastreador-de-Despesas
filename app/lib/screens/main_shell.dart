@@ -4,7 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../api/api_client.dart';
+import '../data/local_store.dart';
 import '../models.dart';
 import '../widgets/summary_card.dart';
 import '../widgets/transaction_tile.dart';
@@ -12,10 +12,9 @@ import 'report_screen.dart';
 import 'transaction_form_screen.dart';
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key, required this.api, required this.onLogout});
+  const MainShell({super.key, required this.store});
 
-  final ApiClient api;
-  final Future<void> Function() onLogout;
+  final LocalStore store;
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -24,12 +23,12 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _selectedTab = 0;
   int _refreshKey = 0;
-  bool _loggingOut = false;
 
   Future<void> _newTransaction(bool isSale) async {
     final saved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => TransactionFormScreen(api: widget.api, isSale: isSale),
+        builder: (_) =>
+            TransactionFormScreen(store: widget.store, isSale: isSale),
       ),
     );
     if (saved == true && mounted) {
@@ -41,7 +40,7 @@ class _MainShellState extends State<MainShell> {
     final saved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => TransactionFormScreen(
-          api: widget.api,
+          store: widget.store,
           isSale: transaction.isSale,
           initial: transaction,
         ),
@@ -58,7 +57,7 @@ class _MainShellState extends State<MainShell> {
       builder: (context) => AlertDialog(
         title: const Text('Excluir lançamento?'),
         content: Text(
-          '“${transaction.description}” será removido da sua conta.',
+          '“${transaction.description}” será removido deste aparelho.',
         ),
         actions: [
           TextButton(
@@ -75,9 +74,9 @@ class _MainShellState extends State<MainShell> {
     if (confirmed != true) return;
     try {
       if (transaction.isSale) {
-        await widget.api.deleteSale(transaction.id);
+        await widget.store.deleteSale(transaction.id);
       } else {
-        await widget.api.deleteExpense(transaction.id);
+        await widget.store.deleteExpense(transaction.id);
       }
       if (mounted) {
         setState(() => _refreshKey++);
@@ -85,7 +84,7 @@ class _MainShellState extends State<MainShell> {
           context,
         ).showSnackBar(const SnackBar(content: Text('Lançamento excluído.')));
       }
-    } on ApiException catch (error) {
+    } on LocalStoreException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error.message)));
@@ -119,50 +118,36 @@ class _MainShellState extends State<MainShell> {
     if (isSale != null && mounted) await _newTransaction(isSale);
   }
 
-  Future<void> _logout() async {
-    if (_loggingOut) return;
-    setState(() => _loggingOut = true);
-    try {
-      await widget.onLogout();
-    } finally {
-      if (mounted) setState(() => _loggingOut = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final titles = ['Visão geral', 'Lançamentos', 'Relatórios'];
     return Scaffold(
       appBar: AppBar(
         title: Text(titles[_selectedTab]),
-        actions: [
-          IconButton(
-            tooltip: 'Sair da conta',
-            onPressed: _loggingOut ? null : _logout,
-            icon: _loggingOut
-                ? const SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.logout_rounded),
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: Tooltip(
+              message: 'Dados salvos somente neste aparelho',
+              child: Icon(Icons.phone_android_rounded),
+            ),
           ),
-          const SizedBox(width: 6),
         ],
       ),
       body: switch (_selectedTab) {
         0 => DashboardScreen(
           key: ValueKey('dashboard-$_refreshKey'),
-          api: widget.api,
+          store: widget.store,
         ),
         1 => HistoryScreen(
           key: ValueKey('history-$_refreshKey'),
-          api: widget.api,
+          store: widget.store,
           onEdit: _editTransaction,
           onDelete: _deleteTransaction,
         ),
         _ => MonthlyReportScreen(
           key: ValueKey('report-$_refreshKey'),
-          api: widget.api,
+          store: widget.store,
           onEdit: _editTransaction,
           onDelete: _deleteTransaction,
         ),
@@ -198,9 +183,9 @@ class _MainShellState extends State<MainShell> {
 }
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key, required this.api});
+  const DashboardScreen({super.key, required this.store});
 
-  final ApiClient api;
+  final LocalStore store;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -210,7 +195,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late Future<DashboardData> _dashboard = _load();
 
   Future<DashboardData> _load() async =>
-      DashboardData.fromJson(await widget.api.dashboard());
+      DashboardData.fromJson(await widget.store.dashboard());
 
   Future<void> _reload() async {
     setState(() => _dashboard = _load());
@@ -558,12 +543,12 @@ class _MonthlyEvolution extends StatelessWidget {
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({
     super.key,
-    required this.api,
+    required this.store,
     required this.onEdit,
     required this.onDelete,
   });
 
-  final ApiClient api;
+  final LocalStore store;
   final ValueChanged<Movimentacao> onEdit;
   final ValueChanged<Movimentacao> onDelete;
 
@@ -582,8 +567,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
         : DateFormat('yyyy-MM-dd').format(_start!);
     final end = _end == null ? null : DateFormat('yyyy-MM-dd').format(_end!);
     final results = await Future.wait([
-      widget.api.sales(startDate: start, endDate: end),
-      widget.api.expenses(startDate: start, endDate: end),
+      widget.store.sales(startDate: start, endDate: end),
+      widget.store.expenses(startDate: start, endDate: end),
     ]);
     return _HistoryData(
       sales: results[0].map(Movimentacao.fromSale).toList(growable: false),
@@ -778,13 +763,13 @@ class _RetryState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.cloud_off_outlined,
+              Icons.storage_rounded,
               size: 42,
               color: Theme.of(context).colorScheme.error,
             ),
             const SizedBox(height: 12),
             const Text(
-              'Não foi possível carregar os dados.',
+              'Não foi possível carregar os dados deste aparelho.',
               textAlign: TextAlign.center,
               style: TextStyle(fontWeight: FontWeight.w700),
             ),

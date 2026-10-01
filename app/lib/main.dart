@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'api/api_client.dart';
-import 'screens/auth_screen.dart';
+import 'data/local_store.dart';
 import 'screens/main_shell.dart';
 
 void main() {
@@ -10,38 +9,23 @@ void main() {
 }
 
 class ControleGastosApp extends StatefulWidget {
-  const ControleGastosApp({super.key, this.apiClient});
+  const ControleGastosApp({super.key, this.store});
 
-  final ApiClient? apiClient;
+  final LocalStore? store;
 
   @override
   State<ControleGastosApp> createState() => _ControleGastosAppState();
 }
 
 class _ControleGastosAppState extends State<ControleGastosApp> {
-  late final ApiClient _api = widget.apiClient ?? ApiClient();
-  late Future<String?> _session = _api.readToken();
-
-  void _refreshSession() {
-    setState(() {
-      _session = _api.readToken();
-    });
-  }
-
-  Future<void> _logout() async {
-    await _api.logout();
-    if (mounted) {
-      setState(() {
-        _session = Future.value(null);
-      });
-    }
-  }
+  late final LocalStore _store = widget.store ?? LocalStore();
+  late Future<void> _initialization = _store.initialize();
 
   @override
   Widget build(BuildContext context) {
     const brand = Color(0xff087f68);
     return MaterialApp(
-      title: 'Controle de Gastos',
+      title: 'Rastreador de Despesas',
       debugShowCheckedModeBanner: false,
       locale: const Locale('pt', 'BR'),
       supportedLocales: const [Locale('pt', 'BR')],
@@ -59,13 +43,15 @@ class _ControleGastosAppState extends State<ControleGastosApp> {
           centerTitle: false,
         ),
       ),
-      home: FutureBuilder<String?>(
-        future: _session,
+      home: FutureBuilder<void>(
+        future: _initialization,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return _SessionError(
+            return _LocalDatabaseError(
               message: snapshot.error.toString(),
-              onRetry: _refreshSession,
+              onRetry: () {
+                setState(() => _initialization = _store.initialize());
+              },
             );
           }
           if (snapshot.connectionState != ConnectionState.done) {
@@ -73,18 +59,15 @@ class _ControleGastosAppState extends State<ControleGastosApp> {
               body: Center(child: CircularProgressIndicator()),
             );
           }
-          if (snapshot.data == null) {
-            return AuthScreen(api: _api, onAuthenticated: _refreshSession);
-          }
-          return MainShell(api: _api, onLogout: _logout);
+          return MainShell(store: _store);
         },
       ),
     );
   }
 }
 
-class _SessionError extends StatelessWidget {
-  const _SessionError({required this.message, required this.onRetry});
+class _LocalDatabaseError extends StatelessWidget {
+  const _LocalDatabaseError({required this.message, required this.onRetry});
 
   final String message;
   final VoidCallback onRetry;
@@ -98,9 +81,9 @@ class _SessionError extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.lock_outline, size: 40),
+              const Icon(Icons.storage_rounded, size: 40),
               const SizedBox(height: 16),
-              const Text('Não foi possível abrir sua sessão.'),
+              const Text('Não foi possível abrir o banco local.'),
               const SizedBox(height: 8),
               Text(message, textAlign: TextAlign.center),
               const SizedBox(height: 16),
