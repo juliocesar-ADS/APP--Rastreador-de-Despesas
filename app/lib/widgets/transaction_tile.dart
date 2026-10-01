@@ -8,11 +8,13 @@ class TransactionTile extends StatelessWidget {
     required this.transaction,
     required this.onEdit,
     required this.onDelete,
+    this.onReceipt,
   });
 
   final Movimentacao transaction;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback? onReceipt;
 
   @override
   Widget build(BuildContext context) {
@@ -57,10 +59,16 @@ class TransactionTile extends StatelessWidget {
               onSelected: (value) {
                 if (value == 'editar') onEdit();
                 if (value == 'excluir') onDelete();
+                if (value == 'comprovante') onReceipt?.call();
               },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'editar', child: Text('Editar')),
-                PopupMenuItem(value: 'excluir', child: Text('Excluir')),
+              itemBuilder: (context) => [
+                if (onReceipt != null)
+                  const PopupMenuItem(
+                    value: 'comprovante',
+                    child: Text('Gerar comprovante PDF'),
+                  ),
+                const PopupMenuItem(value: 'editar', child: Text('Editar')),
+                const PopupMenuItem(value: 'excluir', child: Text('Excluir')),
               ],
             ),
           ],

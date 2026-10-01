@@ -1,6 +1,6 @@
 # Rastreador de Despesas
 
-Aplicativo Android gratuito para registrar vendas e despesas, acompanhar o saldo do negócio, organizar gastos por categoria e consultar histórico e relatórios.
+Aplicativo Android gratuito para registrar vendas e despesas, acompanhar o saldo do negócio, organizar gastos por categoria e consultar histórico e relatórios. Funciona offline e mantém os dados no próprio aparelho.
 
 ## Instalar no Android
 
@@ -12,6 +12,10 @@ Depois do download, abra `app-release.apk` e toque em **Instalar**. Por seguran�
 
 ## Como funciona
 
-O aplicativo funciona offline em Android 7.0 ou superior. Vendas, despesas e categorias são salvas em um banco de dados privado no próprio aparelho. O app não solicita permissão de internet, não precisa criar conta e não envia informações para a nuvem.
+Cadastre produtos para selecioná-los rapidamente nas vendas. Em cada venda, adicione vários produtos e quantidades; o aplicativo calcula o total e prepara um comprovante PDF que pode ser salvo ou compartilhado. O comprovante é apenas um registro da venda e **não é nota fiscal**.
+
+Também é possível registrar vários gastos de uma só vez, organizá-los por categoria e consultar o histórico e os relatórios. Os formulários se adaptam a celulares e tablets Android.
+
+O aplicativo não precisa de conta ou conexão com a internet e não envia informações para a nuvem.
 
 **Importante:** os dados existem somente no aparelho em que foram cadastrados. Eles não são sincronizados nem copiados automaticamente. Desinstalar o app pode apagar os dados; anote as informações importantes antes de removê-lo ou trocar de celular.

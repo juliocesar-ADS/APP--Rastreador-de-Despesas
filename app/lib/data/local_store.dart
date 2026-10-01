@@ -14,7 +14,7 @@ class LocalStore {
   LocalStore({this._database, this.databaseFactory, this.databasePath});
 
   static const _databaseName = 'rastreador_despesas.db';
-  static const _databaseVersion = 1;
+  static const _databaseVersion = 2;
   static const _defaultCategories = [
     'Alimentação',
     'Moradia',
@@ -61,6 +61,7 @@ class LocalStore {
           version: _databaseVersion,
           onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
           onCreate: _createSchema,
+          onUpgrade: _upgradeSchema,
         ),
       );
       _database = database;
@@ -107,11 +108,47 @@ class LocalStore {
     await db.execute(
       'CREATE INDEX idx_gastos_data_hora ON gastos (data_gasto, hora_gasto, id)',
     );
+    await _createProductSchema(db);
     final batch = db.batch();
     for (final name in _defaultCategories) {
       batch.insert('categorias', {'nome': name});
     }
     await batch.commit(noResult: true);
+  }
+
+  static Future<void> _upgradeSchema(
+    sqflite.Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
+    if (oldVersion < 2) await _createProductSchema(db);
+  }
+
+  static Future<void> _createProductSchema(sqflite.Database db) async {
+    await db.execute('''
+      CREATE TABLE produtos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL COLLATE NOCASE UNIQUE,
+        preco_centavos INTEGER NOT NULL CHECK (preco_centavos > 0),
+        ativo INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE venda_itens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        venda_id INTEGER NOT NULL,
+        produto_id INTEGER,
+        produto_nome TEXT NOT NULL,
+        quantidade_milesimos INTEGER NOT NULL CHECK (quantidade_milesimos > 0),
+        preco_unitario_centavos INTEGER NOT NULL CHECK (preco_unitario_centavos > 0),
+        total_centavos INTEGER NOT NULL CHECK (total_centavos > 0),
+        FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE,
+        FOREIGN KEY (produto_id) REFERENCES produtos (id) ON DELETE SET NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_venda_itens_venda ON venda_itens (venda_id, id)',
+    );
   }
 
   Future<List<Map<String, Object?>>> categories() async {
@@ -136,6 +173,55 @@ class LocalStore {
     }
   }
 
+  Future<List<Map<String, Object?>>> products({String? search}) async {
+    final db = await _db;
+    final trimmed = search?.trim();
+    return db
+        .query(
+          'produtos',
+          where: trimmed == null || trimmed.isEmpty
+              ? 'ativo = 1'
+              : 'ativo = 1 AND nome LIKE ?',
+          whereArgs: trimmed == null || trimmed.isEmpty ? null : ['%$trimmed%'],
+          orderBy: 'nome COLLATE NOCASE',
+        )
+        .then(
+          (rows) => rows
+              .map(
+                (row) => {
+                  'id': row['id'],
+                  'nome': row['nome'],
+                  'valor': _centsToAmount(row['preco_centavos']! as int),
+                },
+              )
+              .toList(growable: false),
+        );
+  }
+
+  Future<Map<String, Object?>> createProduct({
+    required String name,
+    required String price,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || trimmed.length > 120) {
+      throw const LocalStoreException('Informe um nome de produto válido.');
+    }
+    final cents = _amountToCents(price);
+    final db = await _db;
+    try {
+      final id = await db.insert('produtos', {
+        'nome': trimmed,
+        'preco_centavos': cents,
+      });
+      return {'id': id, 'nome': trimmed, 'valor': _centsToAmount(cents)};
+    } on sqflite.DatabaseException catch (error) {
+      if (error.isUniqueConstraintError()) {
+        throw const LocalStoreException('Já existe um produto com esse nome.');
+      }
+      throw LocalStoreException('Não foi possível salvar o produto: $error');
+    }
+  }
+
   Future<List<Map<String, Object?>>> sales({
     String? startDate,
     String? endDate,
@@ -156,12 +242,14 @@ class LocalStore {
       conditions.add('forma_pagamento = ?');
       arguments.add(paymentMethod);
     }
-    final rows = await db.query(
-      'vendas',
-      where: conditions.isEmpty ? null : conditions.join(' AND '),
-      whereArgs: arguments.isEmpty ? null : arguments,
-      orderBy: 'data_venda DESC, hora_venda DESC, id DESC',
-    );
+    final rows = await db.rawQuery('''
+      SELECT v.*, COUNT(vi.id) AS quantidade_itens
+      FROM vendas v
+      LEFT JOIN venda_itens vi ON vi.venda_id = v.id
+      ${conditions.isEmpty ? '' : 'WHERE ${conditions.join(' AND ')}'}
+      GROUP BY v.id
+      ORDER BY v.data_venda DESC, v.hora_venda DESC, v.id DESC
+      ''', arguments);
     return rows.map(_saleForApiShape).toList(growable: false);
   }
 
@@ -196,62 +284,156 @@ class LocalStore {
     return rows.map(_expenseForApiShape).toList(growable: false);
   }
 
-  Future<void> saveSale(Map<String, Object?> sale, {int? id}) async {
+  Future<int> saveSale(Map<String, Object?> sale, {int? id}) async {
     final db = await _db;
-    final values = {
-      'descricao': sale['descricao'],
-      'valor_centavos': _amountToCents(sale['valor']),
+    final items = sale['itens'];
+    final itemRows = items is List
+        ? items.cast<Map<String, Object?>>()
+        : const <Map<String, Object?>>[];
+    final totalCents = itemRows.isEmpty
+        ? _amountToCents(sale['valor'])
+        : itemRows.fold<int>(0, (total, item) => total + _saleItemTotal(item));
+    final description = itemRows.isEmpty
+        ? sale['descricao']
+        : itemRows.length == 1
+        ? itemRows.single['produto_nome']
+        : '${itemRows.length} produtos';
+    final values = <String, Object?>{
+      'descricao': description,
+      'valor_centavos': totalCents,
       'data_venda': sale['data_venda'],
       'hora_venda': sale['hora_venda'],
       'forma_pagamento': sale['forma_pagamento'],
       'observacao': sale['observacao'],
     };
     try {
-      if (id == null) {
-        await db.insert('vendas', values);
-      } else {
-        final changed = await db.update(
-          'vendas',
-          values,
-          where: 'id = ?',
-          whereArgs: [id],
-        );
-        if (changed != 1) {
-          throw const LocalStoreException('Venda não encontrada.');
+      return await db.transaction((txn) async {
+        late final int saleId;
+        if (id == null) {
+          saleId = await txn.insert('vendas', values);
+        } else {
+          final changed = await txn.update(
+            'vendas',
+            values,
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+          if (changed != 1) {
+            throw const LocalStoreException('Venda não encontrada.');
+          }
+          saleId = id;
+          await txn.delete(
+            'venda_itens',
+            where: 'venda_id = ?',
+            whereArgs: [saleId],
+          );
         }
-      }
+        for (final item in itemRows) {
+          final productId = item['produto_id'] as int?;
+          await txn.insert('venda_itens', {
+            'venda_id': saleId,
+            'produto_id': productId,
+            'produto_nome': item['produto_nome'] ?? item['descricao'],
+            'quantidade_milesimos': _quantityToMillis(item['quantidade']),
+            'preco_unitario_centavos': _amountToCents(item['valor_unitario']),
+            'total_centavos': _saleItemTotal(item),
+          });
+        }
+        return saleId;
+      });
     } on sqflite.DatabaseException catch (error) {
       throw LocalStoreException('Não foi possível salvar a venda: $error');
     }
   }
 
   Future<void> saveExpense(Map<String, Object?> expense, {int? id}) async {
+    await saveExpenses([expense], id: id);
+  }
+
+  Future<void> saveExpenses(
+    List<Map<String, Object?>> expenses, {
+    int? id,
+  }) async {
+    if (expenses.isEmpty) {
+      throw const LocalStoreException('Adicione ao menos um gasto.');
+    }
     final db = await _db;
-    final values = {
-      'categoria_id': expense['categoria_id'],
-      'descricao': expense['descricao'],
-      'valor_centavos': _amountToCents(expense['valor']),
-      'data_gasto': expense['data_gasto'],
-      'hora_gasto': expense['hora_gasto'],
-      'observacao': expense['observacao'],
-    };
     try {
-      if (id == null) {
-        await db.insert('gastos', values);
-      } else {
-        final changed = await db.update(
-          'gastos',
-          values,
-          where: 'id = ?',
-          whereArgs: [id],
-        );
-        if (changed != 1) {
-          throw const LocalStoreException('Gasto não encontrado.');
+      await db.transaction((txn) async {
+        if (id != null) {
+          if (expenses.length != 1) {
+            throw const LocalStoreException(
+              'Edite um gasto por vez para manter o histórico correto.',
+            );
+          }
+          final changed = await txn.update(
+            'gastos',
+            _expenseValues(expenses.single),
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+          if (changed != 1) {
+            throw const LocalStoreException('Gasto não encontrado.');
+          }
+          return;
         }
-      }
+        for (final expense in expenses) {
+          await txn.insert('gastos', _expenseValues(expense));
+        }
+      });
     } on sqflite.DatabaseException catch (error) {
       throw LocalStoreException('Não foi possível salvar o gasto: $error');
     }
+  }
+
+  Map<String, Object?> _expenseValues(Map<String, Object?> expense) => {
+    'categoria_id': expense['categoria_id'],
+    'descricao': expense['descricao'],
+    'valor_centavos': _amountToCents(expense['valor']),
+    'data_gasto': expense['data_gasto'],
+    'hora_gasto': expense['hora_gasto'],
+    'observacao': expense['observacao'],
+  };
+
+  Future<Map<String, Object?>> saleReceipt(int saleId) async {
+    final db = await _db;
+    final sales = await db.query(
+      'vendas',
+      where: 'id = ?',
+      whereArgs: [saleId],
+    );
+    if (sales.isEmpty) throw const LocalStoreException('Venda não encontrada.');
+    final sale = sales.single;
+    final rows = await db.query(
+      'venda_itens',
+      where: 'venda_id = ?',
+      whereArgs: [saleId],
+      orderBy: 'id',
+    );
+    return {
+      'id': saleId,
+      'data': sale['data_venda'],
+      'hora': sale['hora_venda'],
+      'pagamento': sale['forma_pagamento'],
+      'observacao': sale['observacao'],
+      'descricao': sale['descricao'],
+      'total': _centsToAmount(sale['valor_centavos']! as int),
+      'itens': rows
+          .map(
+            (row) => {
+              'produto_id': row['produto_id'],
+              'produto_nome': row['produto_nome'],
+              'quantidade': _milliToQuantity(
+                row['quantidade_milesimos']! as int,
+              ),
+              'valor_unitario': _centsToAmount(
+                row['preco_unitario_centavos']! as int,
+              ),
+              'total': _centsToAmount(row['total_centavos']! as int),
+            },
+          )
+          .toList(growable: false),
+    };
   }
 
   Future<void> deleteSale(int id) async {
@@ -405,6 +587,7 @@ class LocalStore {
     'id': row['id'],
     'descricao': row['descricao'],
     'valor': _centsToAmount(row['valor_centavos']! as int),
+    'quantidade_itens': row['quantidade_itens'] ?? 0,
     'data_venda': row['data_venda'],
     'hora_venda': row['hora_venda'],
     'forma_pagamento': row['forma_pagamento'],
@@ -440,6 +623,47 @@ class LocalStore {
       throw const LocalStoreException('O valor precisa ser maior que zero.');
     }
     return cents;
+  }
+
+  int _quantityToMillis(Object? value) {
+    if (value is! String) {
+      throw const LocalStoreException('Informe uma quantidade válida.');
+    }
+    final normalized = value.trim().replaceAll(',', '.');
+    final match = RegExp(r'^(\d{1,8})(?:\.(\d{1,3}))?$').firstMatch(normalized);
+    if (match == null) {
+      throw const LocalStoreException(
+        'A quantidade pode ter até três casas decimais.',
+      );
+    }
+    final whole = int.parse(match.group(1)!);
+    final decimals = int.parse((match.group(2) ?? '').padRight(3, '0'));
+    final milli = whole * 1000 + decimals;
+    if (milli <= 0) {
+      throw const LocalStoreException(
+        'A quantidade precisa ser maior que zero.',
+      );
+    }
+    return milli;
+  }
+
+  String _milliToQuantity(int milli) {
+    final whole = milli ~/ 1000;
+    final decimals = (milli % 1000).toString().padLeft(3, '0');
+    final trimmed = decimals.replaceFirst(RegExp(r'0+$'), '');
+    return trimmed.isEmpty ? '$whole' : '$whole.$trimmed';
+  }
+
+  int _saleItemTotal(Map<String, Object?> item) {
+    final quantity = _quantityToMillis(item['quantidade']);
+    final price = _amountToCents(item['valor_unitario']);
+    final total = (price * quantity + 500) ~/ 1000;
+    if (total <= 0) {
+      throw const LocalStoreException(
+        'O total do produto precisa ser maior que zero.',
+      );
+    }
+    return total;
   }
 
   String _centsToAmount(int cents) {

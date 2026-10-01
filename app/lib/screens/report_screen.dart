@@ -12,11 +12,13 @@ class MonthlyReportScreen extends StatefulWidget {
     required this.store,
     required this.onEdit,
     required this.onDelete,
+    required this.onReceipt,
   });
 
   final LocalStore store;
   final ValueChanged<Movimentacao> onEdit;
   final ValueChanged<Movimentacao> onDelete;
+  final ValueChanged<Movimentacao> onReceipt;
 
   @override
   State<MonthlyReportScreen> createState() => _MonthlyReportScreenState();
@@ -162,6 +164,9 @@ class _MonthlyReportScreenState extends State<MonthlyReportScreen> {
                       transaction: item,
                       onEdit: () => widget.onEdit(item),
                       onDelete: () => widget.onDelete(item),
+                      onReceipt: item.isSale
+                          ? () => widget.onReceipt(item)
+                          : null,
                     ),
                   ),
                 ),

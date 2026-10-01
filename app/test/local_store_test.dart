@@ -1,10 +1,12 @@
 import 'dart:io';
 
 import 'package:controle_gastos/data/local_store.dart';
+import 'package:controle_gastos/services/sale_receipt_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late LocalStore store;
 
   setUpAll(sqfliteFfiInit);
@@ -160,5 +162,143 @@ void main() {
       }),
       throwsA(isA<LocalStoreException>()),
     );
+  });
+
+  test('salva venda com vários produtos e gera PDF não fiscal', () async {
+    final productA = await store.createProduct(name: 'Café', price: '12.50');
+    final productB = await store.createProduct(name: 'Pão', price: '2.00');
+    final saleId = await store.saveSale({
+      'descricao': 'Venda com itens',
+      'valor': '0.01',
+      'itens': [
+        {
+          'produto_id': productA['id'],
+          'produto_nome': 'Café',
+          'quantidade': '2',
+          'valor_unitario': '12.50',
+        },
+        {
+          'produto_id': productB['id'],
+          'produto_nome': 'Pão',
+          'quantidade': '1.5',
+          'valor_unitario': '2.00',
+        },
+      ],
+      'data_venda': '2026-10-01',
+      'hora_venda': '09:15',
+      'forma_pagamento': 'pix',
+      'observacao': null,
+    });
+
+    final receipt = await store.saleReceipt(saleId);
+    expect(receipt['total'], '28.00');
+    expect(receipt['itens'], hasLength(2));
+    expect((receipt['itens']! as List).last['total'], '3.00');
+    expect((await store.sales()).single['valor'], '28.00');
+
+    final pdf = await SaleReceiptService.createPdf(receipt);
+    expect(String.fromCharCodes(pdf.take(4)), '%PDF');
+  });
+
+  test('salva lote de gastos atomicamente', () async {
+    final category = (await store.categories()).first;
+    final expenses = [
+      {
+        'descricao': 'Material',
+        'valor': '10.00',
+        'data_gasto': '2026-10-01',
+        'hora_gasto': '10:00',
+        'categoria_id': category['id'],
+        'observacao': null,
+      },
+      {
+        'descricao': 'Entrega',
+        'valor': '5.50',
+        'data_gasto': '2026-10-01',
+        'hora_gasto': '10:01',
+        'categoria_id': category['id'],
+        'observacao': null,
+      },
+    ];
+
+    await store.saveExpenses(expenses);
+    expect(await store.expenses(), hasLength(2));
+
+    await expectLater(
+      store.saveExpenses([
+        expenses.first,
+        {...expenses.last, 'valor': 'inválido'},
+      ]),
+      throwsA(isA<LocalStoreException>()),
+    );
+    expect(await store.expenses(), hasLength(2));
+  });
+
+  test('migra banco v1 preservando vendas e gastos existentes', () async {
+    final file = File(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}'
+      'rastreador-v1-${DateTime.now().microsecondsSinceEpoch}.db',
+    );
+    final database = await databaseFactoryFfi.openDatabase(
+      file.path,
+      options: OpenDatabaseOptions(
+        version: 1,
+        onCreate: (db, version) async {
+          await db.execute(
+            'CREATE TABLE categorias (id INTEGER PRIMARY KEY, nome TEXT NOT NULL UNIQUE)',
+          );
+          await db.execute('''
+            CREATE TABLE vendas (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              descricao TEXT NOT NULL,
+              valor_centavos INTEGER NOT NULL,
+              data_venda TEXT NOT NULL,
+              hora_venda TEXT NOT NULL,
+              forma_pagamento TEXT NOT NULL,
+              observacao TEXT
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE gastos (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              categoria_id INTEGER NOT NULL,
+              descricao TEXT NOT NULL,
+              valor_centavos INTEGER NOT NULL,
+              data_gasto TEXT NOT NULL,
+              hora_gasto TEXT NOT NULL,
+              observacao TEXT,
+              FOREIGN KEY (categoria_id) REFERENCES categorias (id)
+            )
+          ''');
+          await db.insert('categorias', {'nome': 'Categoria antiga'});
+          await db.insert('vendas', {
+            'descricao': 'Venda antiga',
+            'valor_centavos': 1234,
+            'data_venda': '2026-09-30',
+            'hora_venda': '12:00',
+            'forma_pagamento': 'dinheiro',
+          });
+          await db.insert('gastos', {
+            'categoria_id': 1,
+            'descricao': 'Gasto antigo',
+            'valor_centavos': 500,
+            'data_gasto': '2026-09-30',
+            'hora_gasto': '12:30',
+          });
+        },
+      ),
+    );
+    await database.close();
+
+    final migratedStore = LocalStore(
+      databaseFactory: databaseFactoryFfi,
+      databasePath: file.path,
+    );
+    await migratedStore.initialize();
+    expect((await migratedStore.sales()).single['valor'], '12.34');
+    expect((await migratedStore.expenses()).single['valor'], '5.00');
+    expect(await migratedStore.products(), isEmpty);
+    await migratedStore.close();
+    await file.delete();
   });
 }
