@@ -1,22 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:printing/printing.dart';
 
 import '../data/local_store.dart';
 import '../models.dart';
-import '../services/sale_receipt_service.dart';
 
 class TransactionFormResult {
-  const TransactionFormResult({
-    required this.isSale,
-    this.saleId,
-    this.pdfError,
-  });
+  const TransactionFormResult({required this.isSale, this.saleId});
 
   final bool isSale;
   final int? saleId;
-  final String? pdfError;
 }
 
 class TransactionFormScreen extends StatefulWidget {
@@ -47,6 +40,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   List<Map<String, Object?>> _products = [];
   List<Map<String, Object?>> _categories = [];
   bool _saving = false;
+  bool _showAdvanced = false;
   String? _error;
 
   bool get _editing => widget.initial != null;
@@ -357,27 +351,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           'forma_pagamento': _paymentMethod,
           'observacao': observation,
         }, id: widget.initial?.id);
-        String? pdfError;
-        if (!_editing) {
-          try {
-            final receipt = await widget.store.saleReceipt(saleId);
-            final bytes = await SaleReceiptService.createPdf(receipt);
-            await Printing.sharePdf(
-              bytes: bytes,
-              filename: 'comprovante-venda-$saleId.pdf',
-            );
-          } on Exception catch (error) {
-            pdfError = error.toString();
-          }
-        }
         if (mounted) {
           Navigator.pop(
             context,
-            TransactionFormResult(
-              isSale: true,
-              saleId: saleId,
-              pdfError: pdfError,
-            ),
+            TransactionFormResult(isSale: true, saleId: saleId),
           );
         }
         return;
@@ -458,20 +435,27 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                               else
                                 _expenseEditor(wide, constraints.maxWidth),
                               const SizedBox(height: 14),
-                              if (wide)
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                              Card(
+                                margin: EdgeInsets.zero,
+                                child: ExpansionTile(
+                                  initiallyExpanded: _showAdvanced || _editing,
+                                  onExpansionChanged: (expanded) =>
+                                      _showAdvanced = expanded,
+                                  leading: const Icon(Icons.tune_rounded),
+                                  title: const Text('Mais detalhes (opcional)'),
+                                  childrenPadding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    0,
+                                    16,
+                                    16,
+                                  ),
                                   children: [
-                                    Expanded(child: _dateTimeControls()),
-                                    const SizedBox(width: 14),
-                                    Expanded(child: _paymentOrObservation()),
+                                    _dateTimeControls(),
+                                    const SizedBox(height: 12),
+                                    _paymentOrObservation(),
                                   ],
-                                )
-                              else ...[
-                                _paymentOrObservation(),
-                                const SizedBox(height: 12),
-                                _dateTimeControls(),
-                              ],
+                                ),
+                              ),
                               if (_error != null) ...[
                                 const SizedBox(height: 12),
                                 _ErrorBanner(message: _error!),
@@ -490,7 +474,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                                       )
                                     : Icon(
                                         widget.isSale
-                                            ? Icons.picture_as_pdf_outlined
+                                            ? Icons.check_rounded
                                             : Icons.done_all_rounded,
                                       ),
                                 label: Padding(
@@ -501,7 +485,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                                     _saving
                                         ? 'Salvando…'
                                         : widget.isSale
-                                        ? 'Salvar venda e gerar comprovante'
+                                        ? 'Salvar venda'
                                         : _editing
                                         ? 'Salvar alteração'
                                         : _expenseLines.length == 1

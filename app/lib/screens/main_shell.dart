@@ -3,14 +3,13 @@ import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:printing/printing.dart';
 
 import '../data/local_store.dart';
 import '../models.dart';
-import '../services/sale_receipt_service.dart';
 import '../widgets/summary_card.dart';
 import '../widgets/transaction_tile.dart';
 import 'report_screen.dart';
+import 'receipt_screen.dart';
 import 'transaction_form_screen.dart';
 
 class MainShell extends StatefulWidget {
@@ -56,31 +55,10 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _showSaveResult(TransactionFormResult result) {
-    final message = result.pdfError == null
-        ? result.isSale
-              ? 'Venda salva.'
-              : 'Gastos salvos.'
-        : 'Venda salva, mas não foi possível gerar o PDF: ${result.pdfError}';
+    final message = result.isSale ? 'Venda salva.' : 'Gastos salvos.';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), duration: const Duration(seconds: 5)),
     );
-  }
-
-  Future<void> _shareReceipt(Movimentacao transaction) async {
-    try {
-      final receipt = await widget.store.saleReceipt(transaction.id);
-      final bytes = await SaleReceiptService.createPdf(receipt);
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: 'comprovante-venda-${transaction.id}.pdf',
-      );
-    } on Exception catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Não foi possível gerar o PDF: $error')),
-        );
-      }
-    }
   }
 
   Future<void> _deleteTransaction(Movimentacao transaction) async {
@@ -152,7 +130,7 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final titles = ['Visão geral', 'Lançamentos', 'Relatórios'];
+    final titles = ['Visão geral', 'Lançamentos', 'Relatórios', 'Comprovantes'];
     return Scaffold(
       appBar: AppBar(
         title: Text(titles[_selectedTab]),
@@ -176,21 +154,25 @@ class _MainShellState extends State<MainShell> {
           store: widget.store,
           onEdit: _editTransaction,
           onDelete: _deleteTransaction,
-          onReceipt: _shareReceipt,
         ),
-        _ => MonthlyReportScreen(
+        2 => MonthlyReportScreen(
           key: ValueKey('report-$_refreshKey'),
           store: widget.store,
           onEdit: _editTransaction,
           onDelete: _deleteTransaction,
-          onReceipt: _shareReceipt,
+        ),
+        _ => ReceiptScreen(
+          key: ValueKey('receipts-$_refreshKey'),
+          store: widget.store,
         ),
       },
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _chooseNewTransaction,
-        icon: const Icon(Icons.add),
-        label: const Text('Novo lançamento'),
-      ),
+      floatingActionButton: _selectedTab == 3
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _chooseNewTransaction,
+              icon: const Icon(Icons.add),
+              label: const Text('Novo lançamento'),
+            ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedTab,
         onDestinationSelected: (index) => setState(() => _selectedTab = index),
@@ -209,6 +191,11 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(Icons.bar_chart_outlined),
             selectedIcon: Icon(Icons.bar_chart),
             label: 'Relatórios',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.picture_as_pdf_outlined),
+            selectedIcon: Icon(Icons.picture_as_pdf),
+            label: 'Comprovantes',
           ),
         ],
       ),
@@ -580,13 +567,11 @@ class HistoryScreen extends StatefulWidget {
     required this.store,
     required this.onEdit,
     required this.onDelete,
-    required this.onReceipt,
   });
 
   final LocalStore store;
   final ValueChanged<Movimentacao> onEdit;
   final ValueChanged<Movimentacao> onDelete;
-  final ValueChanged<Movimentacao> onReceipt;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -717,19 +702,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       items: all,
                       onEdit: widget.onEdit,
                       onDelete: widget.onDelete,
-                      onReceipt: widget.onReceipt,
                     ),
                     _TransactionList(
                       items: data.sales,
                       onEdit: widget.onEdit,
                       onDelete: widget.onDelete,
-                      onReceipt: widget.onReceipt,
                     ),
                     _TransactionList(
                       items: data.expenses,
                       onEdit: widget.onEdit,
                       onDelete: widget.onDelete,
-                      onReceipt: widget.onReceipt,
                     ),
                   ],
                 );
@@ -759,13 +741,11 @@ class _TransactionList extends StatelessWidget {
     required this.items,
     required this.onEdit,
     required this.onDelete,
-    required this.onReceipt,
   });
 
   final List<Movimentacao> items;
   final ValueChanged<Movimentacao> onEdit;
   final ValueChanged<Movimentacao> onDelete;
-  final ValueChanged<Movimentacao> onReceipt;
 
   @override
   Widget build(BuildContext context) {
@@ -784,7 +764,6 @@ class _TransactionList extends StatelessWidget {
         transaction: items[index],
         onEdit: () => onEdit(items[index]),
         onDelete: () => onDelete(items[index]),
-        onReceipt: items[index].isSale ? () => onReceipt(items[index]) : null,
       ),
     );
   }

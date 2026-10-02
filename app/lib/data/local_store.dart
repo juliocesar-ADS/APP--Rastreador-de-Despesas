@@ -14,7 +14,7 @@ class LocalStore {
   LocalStore({this._database, this.databaseFactory, this.databasePath});
 
   static const _databaseName = 'rastreador_despesas.db';
-  static const _databaseVersion = 2;
+  static const _databaseVersion = 3;
   static const _defaultCategories = [
     'Alimentação',
     'Moradia',
@@ -109,6 +109,7 @@ class LocalStore {
       'CREATE INDEX idx_gastos_data_hora ON gastos (data_gasto, hora_gasto, id)',
     );
     await _createProductSchema(db);
+    await _createReceiptSettingsSchema(db);
     final batch = db.batch();
     for (final name in _defaultCategories) {
       batch.insert('categorias', {'nome': name});
@@ -122,6 +123,7 @@ class LocalStore {
     int newVersion,
   ) async {
     if (oldVersion < 2) await _createProductSchema(db);
+    if (oldVersion < 3) await _createReceiptSettingsSchema(db);
   }
 
   static Future<void> _createProductSchema(sqflite.Database db) async {
@@ -149,6 +151,15 @@ class LocalStore {
     await db.execute(
       'CREATE INDEX idx_venda_itens_venda ON venda_itens (venda_id, id)',
     );
+  }
+
+  static Future<void> _createReceiptSettingsSchema(sqflite.Database db) async {
+    await db.execute('''
+      CREATE TABLE configuracoes_comprovante (
+        chave TEXT PRIMARY KEY,
+        valor TEXT NOT NULL
+      )
+    ''');
   }
 
   Future<List<Map<String, Object?>>> categories() async {
@@ -219,6 +230,32 @@ class LocalStore {
         throw const LocalStoreException('Já existe um produto com esse nome.');
       }
       throw LocalStoreException('Não foi possível salvar o produto: $error');
+    }
+  }
+
+  Future<Map<String, String>> receiptSettings() async {
+    final db = await _db;
+    final rows = await db.query('configuracoes_comprovante');
+    return {
+      for (final row in rows) row['chave']! as String: row['valor']! as String,
+    };
+  }
+
+  Future<void> saveReceiptSettings(Map<String, String> settings) async {
+    final db = await _db;
+    try {
+      await db.transaction((txn) async {
+        for (final entry in settings.entries) {
+          await txn.insert('configuracoes_comprovante', {
+            'chave': entry.key,
+            'valor': entry.value,
+          }, conflictAlgorithm: sqflite.ConflictAlgorithm.replace);
+        }
+      });
+    } on sqflite.DatabaseException catch (error) {
+      throw LocalStoreException(
+        'Não foi possível salvar as preferências do comprovante: $error',
+      );
     }
   }
 

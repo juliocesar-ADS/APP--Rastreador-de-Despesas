@@ -164,7 +164,7 @@ void main() {
     );
   });
 
-  test('salva venda com vários produtos e gera PDF não fiscal', () async {
+  test('salva venda com itens e gera PDF personalizável não fiscal', () async {
     final productA = await store.createProduct(name: 'Café', price: '12.50');
     final productB = await store.createProduct(name: 'Pão', price: '2.00');
     final saleId = await store.saveSale({
@@ -196,7 +196,15 @@ void main() {
     expect((receipt['itens']! as List).last['total'], '3.00');
     expect((await store.sales()).single['valor'], '28.00');
 
-    final pdf = await SaleReceiptService.createPdf(receipt);
+    final pdf = await SaleReceiptService.createPdf(
+      receipt,
+      options: const ReceiptOptions(
+        storeName: 'Loja da Ana',
+        customerName: 'Cliente Teste',
+        showPayment: false,
+        showObservation: false,
+      ),
+    );
     expect(String.fromCharCodes(pdf.take(4)), '%PDF');
   });
 
@@ -298,7 +306,113 @@ void main() {
     expect((await migratedStore.sales()).single['valor'], '12.34');
     expect((await migratedStore.expenses()).single['valor'], '5.00');
     expect(await migratedStore.products(), isEmpty);
+    await migratedStore.saveReceiptSettings({
+      'storeName': 'Mercadinho do bairro',
+      'showPayment': 'false',
+    });
+    expect(await migratedStore.receiptSettings(), {
+      'storeName': 'Mercadinho do bairro',
+      'showPayment': 'false',
+    });
     await migratedStore.close();
     await file.delete();
   });
+
+  test(
+    'migra banco v2 e preserva produtos e itens de vendas existentes',
+    () async {
+      final file = File(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}'
+        'rastreador-v2-${DateTime.now().microsecondsSinceEpoch}.db',
+      );
+      final database = await databaseFactoryFfi.openDatabase(
+        file.path,
+        options: OpenDatabaseOptions(
+          version: 2,
+          onCreate: (db, version) async {
+            await db.execute(
+              'CREATE TABLE categorias (id INTEGER PRIMARY KEY, nome TEXT NOT NULL UNIQUE)',
+            );
+            await db.execute('''
+            CREATE TABLE vendas (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              descricao TEXT NOT NULL,
+              valor_centavos INTEGER NOT NULL,
+              data_venda TEXT NOT NULL,
+              hora_venda TEXT NOT NULL,
+              forma_pagamento TEXT NOT NULL,
+              observacao TEXT
+            )
+          ''');
+            await db.execute('''
+            CREATE TABLE gastos (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              categoria_id INTEGER NOT NULL,
+              descricao TEXT NOT NULL,
+              valor_centavos INTEGER NOT NULL,
+              data_gasto TEXT NOT NULL,
+              hora_gasto TEXT NOT NULL,
+              observacao TEXT,
+              FOREIGN KEY (categoria_id) REFERENCES categorias (id)
+            )
+          ''');
+            await db.execute('''
+            CREATE TABLE produtos (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              nome TEXT NOT NULL COLLATE NOCASE UNIQUE,
+              preco_centavos INTEGER NOT NULL,
+              ativo INTEGER NOT NULL DEFAULT 1
+            )
+          ''');
+            await db.execute('''
+            CREATE TABLE venda_itens (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              venda_id INTEGER NOT NULL,
+              produto_id INTEGER,
+              produto_nome TEXT NOT NULL,
+              quantidade_milesimos INTEGER NOT NULL,
+              preco_unitario_centavos INTEGER NOT NULL,
+              total_centavos INTEGER NOT NULL,
+              FOREIGN KEY (venda_id) REFERENCES vendas (id) ON DELETE CASCADE,
+              FOREIGN KEY (produto_id) REFERENCES produtos (id) ON DELETE SET NULL
+            )
+          ''');
+            await db.insert('categorias', {'nome': 'Outros'});
+            await db.insert('produtos', {
+              'nome': 'Caderno',
+              'preco_centavos': 800,
+            });
+            await db.insert('vendas', {
+              'descricao': 'Venda antiga com produto',
+              'valor_centavos': 1600,
+              'data_venda': '2026-09-30',
+              'hora_venda': '12:00',
+              'forma_pagamento': 'pix',
+            });
+            await db.insert('venda_itens', {
+              'venda_id': 1,
+              'produto_id': 1,
+              'produto_nome': 'Caderno',
+              'quantidade_milesimos': 2000,
+              'preco_unitario_centavos': 800,
+              'total_centavos': 1600,
+            });
+          },
+        ),
+      );
+      await database.close();
+
+      final migratedStore = LocalStore(
+        databaseFactory: databaseFactoryFfi,
+        databasePath: file.path,
+      );
+      await migratedStore.initialize();
+      expect((await migratedStore.sales()).single['valor'], '16.00');
+      expect((await migratedStore.saleReceipt(1))['itens'], hasLength(1));
+      expect((await migratedStore.products()).single['nome'], 'Caderno');
+      expect(await migratedStore.receiptSettings(), isEmpty);
+      await migratedStore.close();
+      await file.delete();
+    },
+  );
 }

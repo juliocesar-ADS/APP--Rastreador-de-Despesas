@@ -12,9 +12,11 @@ Depois do download, abra `app-release.apk` e toque em **Instalar**. Por seguran�
 
 ## Como funciona
 
-Cadastre produtos para selecioná-los rapidamente nas vendas. Em cada venda, adicione vários produtos e quantidades; o aplicativo calcula o total e prepara um comprovante PDF que pode ser salvo ou compartilhado. O comprovante é apenas um registro da venda e **não é nota fiscal**.
+Cadastre produtos para selecioná-los rapidamente nas vendas. Em cada venda, adicione vários produtos e quantidades; o aplicativo calcula o total e salva o lançamento sem interromper o registro para abrir um PDF.
 
 Também é possível registrar vários gastos de uma só vez, organizá-los por categoria e consultar o histórico e os relatórios. Os formulários se adaptam a celulares e tablets Android.
+
+Na aba **Comprovantes**, selecione uma venda salva, informe o nome da loja e, se quiser, do cliente. Escolha quais informações mostrar e gere um PDF organizado para salvar ou compartilhar. As preferências do comprovante ficam guardadas no aparelho. O documento é apenas um registro da venda e **não é nota fiscal**.
 
 O aplicativo não precisa de conta ou conexão com a internet e não envia informações para a nuvem.
 

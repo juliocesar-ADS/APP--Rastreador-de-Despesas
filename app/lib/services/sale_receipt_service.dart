@@ -3,11 +3,42 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+class ReceiptOptions {
+  const ReceiptOptions({
+    this.storeName = '',
+    this.customerName = '',
+    this.showDate = true,
+    this.showTime = true,
+    this.showPayment = true,
+    this.showItems = true,
+    this.showQuantities = true,
+    this.showUnitPrices = true,
+    this.showLineTotals = true,
+    this.showObservation = true,
+    this.showTotal = true,
+  });
+
+  final String storeName;
+  final String customerName;
+  final bool showDate;
+  final bool showTime;
+  final bool showPayment;
+  final bool showItems;
+  final bool showQuantities;
+  final bool showUnitPrices;
+  final bool showLineTotals;
+  final bool showObservation;
+  final bool showTotal;
+}
+
 class SaleReceiptService {
   static final _money = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
   static final _date = DateFormat('dd/MM/yyyy');
 
-  static Future<Uint8List> createPdf(Map<String, Object?> receipt) async {
+  static Future<Uint8List> createPdf(
+    Map<String, Object?> receipt, {
+    ReceiptOptions options = const ReceiptOptions(),
+  }) async {
     final regularFont = pw.Font.ttf(
       await rootBundle.load('assets/pdf_fonts/Roboto-Regular.ttf'),
     );
@@ -16,7 +47,9 @@ class SaleReceiptService {
     );
     final pdf = pw.Document(
       title: 'Comprovante de venda ${receipt['id']}',
-      author: 'Rastreador de Despesas',
+      author: options.storeName.trim().isEmpty
+          ? 'Rastreador de Despesas'
+          : options.storeName.trim(),
     );
     final items = (receipt['itens'] as List<Object?>?) ?? const [];
     final rows = items.isEmpty
@@ -29,8 +62,15 @@ class SaleReceiptService {
             },
           ]
         : items.cast<Map<String, Object?>>();
-    final total = _parseMoney(receipt['total']);
     final date = DateTime.tryParse(receipt['data']! as String);
+    final detailFields = <pw.Widget>[
+      if (options.showDate)
+        _info('DATA', date == null ? '--' : _date.format(date)),
+      if (options.showTime)
+        _info('HORÁRIO', (receipt['hora']! as String).substring(0, 5)),
+      if (options.showPayment)
+        _info('PAGAMENTO', _paymentLabel(receipt['pagamento'] as String?)),
+    ];
 
     pdf.addPage(
       pw.MultiPage(
@@ -51,6 +91,17 @@ class SaleReceiptService {
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
+                    if (options.storeName.trim().isNotEmpty) ...[
+                      pw.Text(
+                        options.storeName.trim(),
+                        style: pw.TextStyle(
+                          color: PdfColors.white,
+                          fontSize: 12,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.SizedBox(height: 7),
+                    ],
                     pw.Text(
                       'COMPROVANTE DE VENDA',
                       style: pw.TextStyle(
@@ -80,114 +131,81 @@ class SaleReceiptService {
               ],
             ),
           ),
-          pw.SizedBox(height: 22),
-          pw.Row(
-            children: [
-              _info('DATA', date == null ? '--' : _date.format(date)),
-              pw.SizedBox(width: 34),
-              _info('HORÁRIO', (receipt['hora']! as String).substring(0, 5)),
-              pw.SizedBox(width: 34),
-              _info(
-                'PAGAMENTO',
-                _paymentLabel(receipt['pagamento'] as String?),
+          if (options.customerName.trim().isNotEmpty) ...[
+            pw.SizedBox(height: 20),
+            _info('CLIENTE', options.customerName.trim()),
+          ],
+          if (detailFields.isNotEmpty) ...[
+            pw.SizedBox(height: 22),
+            pw.Row(
+              children: [
+                for (var index = 0; index < detailFields.length; index++) ...[
+                  if (index > 0) pw.SizedBox(width: 34),
+                  detailFields[index],
+                ],
+              ],
+            ),
+          ],
+          if (options.showItems) ...[
+            pw.SizedBox(height: 26),
+            pw.Text(
+              'PRODUTOS',
+              style: pw.TextStyle(
+                color: PdfColor.fromHex('#087F68'),
+                fontSize: 10,
+                fontWeight: pw.FontWeight.bold,
+                letterSpacing: 1.2,
               ),
-            ],
-          ),
-          pw.SizedBox(height: 26),
-          pw.Text(
-            'PRODUTOS',
-            style: pw.TextStyle(
-              color: PdfColor.fromHex('#087F68'),
-              fontSize: 10,
-              fontWeight: pw.FontWeight.bold,
-              letterSpacing: 1.2,
             ),
-          ),
-          pw.SizedBox(height: 9),
-          pw.Table(
-            border: pw.TableBorder(
-              horizontalInside: pw.BorderSide(color: PdfColors.grey300),
-              bottom: pw.BorderSide(color: PdfColors.grey400),
-            ),
-            columnWidths: {
-              0: const pw.FlexColumnWidth(4),
-              1: const pw.FlexColumnWidth(1.1),
-              2: const pw.FlexColumnWidth(1.7),
-              3: const pw.FlexColumnWidth(1.8),
-            },
-            children: [
-              pw.TableRow(
+            pw.SizedBox(height: 9),
+            _itemsTable(rows, options),
+          ],
+          if (options.showTotal) ...[
+            pw.SizedBox(height: 18),
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Container(
+                width: 235,
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 decoration: pw.BoxDecoration(
                   color: PdfColor.fromHex('#EFF6F3'),
+                  borderRadius: const pw.BorderRadius.all(
+                    pw.Radius.circular(9),
+                  ),
                 ),
-                children: [
-                  _cell('PRODUTO', header: true),
-                  _cell('QTD.', header: true, align: pw.TextAlign.right),
-                  _cell('UNITÁRIO', header: true, align: pw.TextAlign.right),
-                  _cell('TOTAL', header: true, align: pw.TextAlign.right),
-                ],
-              ),
-              ...rows.map(
-                (item) => pw.TableRow(
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    _cell(item['produto_nome'] as String? ?? 'Produto'),
-                    _cell(
-                      item['quantidade'] as String? ?? '1',
-                      align: pw.TextAlign.right,
+                    pw.Text(
+                      'TOTAL',
+                      style: pw.TextStyle(
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColor.fromHex('#17352F'),
+                      ),
                     ),
-                    _cell(
-                      _formatMoney(item['valor_unitario']),
-                      align: pw.TextAlign.right,
-                    ),
-                    _cell(
-                      _formatMoney(item['total']),
-                      align: pw.TextAlign.right,
+                    pw.Text(
+                      _money.format(_parseMoney(receipt['total'])),
+                      style: pw.TextStyle(
+                        fontSize: 15,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColor.fromHex('#087F68'),
+                      ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-          pw.SizedBox(height: 18),
-          pw.Align(
-            alignment: pw.Alignment.centerRight,
-            child: pw.Container(
-              width: 235,
-              padding: const pw.EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 12,
-              ),
-              decoration: pw.BoxDecoration(
-                color: PdfColor.fromHex('#EFF6F3'),
-                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(9)),
-              ),
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'TOTAL',
-                    style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColor.fromHex('#17352F'),
-                    ),
-                  ),
-                  pw.Text(
-                    _money.format(total),
-                    style: pw.TextStyle(
-                      fontSize: 15,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColor.fromHex('#087F68'),
-                    ),
-                  ),
-                ],
-              ),
             ),
-          ),
-          if ((receipt['observacao'] as String?)?.isNotEmpty == true) ...[
-            pw.SizedBox(height: 22),
-            _info('OBSERVAÇÃO', receipt['observacao']! as String),
           ],
-          pw.Spacer(),
+          if (options.showObservation &&
+              (receipt['observacao'] as String?)?.trim().isNotEmpty ==
+                  true) ...[
+            pw.SizedBox(height: 22),
+            _info('OBSERVAÇÃO', (receipt['observacao']! as String).trim()),
+          ],
+          pw.SizedBox(height: 28),
           pw.Divider(color: PdfColors.grey300),
           pw.Center(
             child: pw.Text(
@@ -201,6 +219,61 @@ class SaleReceiptService {
       ),
     );
     return pdf.save();
+  }
+
+  static pw.Widget _itemsTable(
+    List<Map<String, Object?>> rows,
+    ReceiptOptions options,
+  ) {
+    final headers = <String>['PRODUTO'];
+    final columns = <int, pw.TableColumnWidth>{0: const pw.FlexColumnWidth(4)};
+    if (options.showQuantities) {
+      columns[headers.length] = const pw.FlexColumnWidth(1.1);
+      headers.add('QTD.');
+    }
+    if (options.showUnitPrices) {
+      columns[headers.length] = const pw.FlexColumnWidth(1.7);
+      headers.add('UNITÁRIO');
+    }
+    if (options.showLineTotals) {
+      columns[headers.length] = const pw.FlexColumnWidth(1.8);
+      headers.add('TOTAL');
+    }
+    final alignments = List<pw.TextAlign>.generate(
+      headers.length,
+      (index) => index == 0 ? pw.TextAlign.left : pw.TextAlign.right,
+    );
+    final tableRows = <pw.TableRow>[
+      pw.TableRow(
+        decoration: pw.BoxDecoration(color: PdfColor.fromHex('#EFF6F3')),
+        children: [
+          for (var index = 0; index < headers.length; index++)
+            _cell(headers[index], header: true, align: alignments[index]),
+        ],
+      ),
+      ...rows.map((item) {
+        final values = <String>[
+          item['produto_nome'] as String? ?? 'Produto',
+          if (options.showQuantities) item['quantidade'] as String? ?? '1',
+          if (options.showUnitPrices) _formatMoney(item['valor_unitario']),
+          if (options.showLineTotals) _formatMoney(item['total']),
+        ];
+        return pw.TableRow(
+          children: [
+            for (var index = 0; index < values.length; index++)
+              _cell(values[index], align: alignments[index]),
+          ],
+        );
+      }),
+    ];
+    return pw.Table(
+      border: pw.TableBorder(
+        horizontalInside: pw.BorderSide(color: PdfColors.grey300),
+        bottom: pw.BorderSide(color: PdfColors.grey400),
+      ),
+      columnWidths: columns,
+      children: tableRows,
+    );
   }
 
   static pw.Widget _info(String label, String value) => pw.Column(
